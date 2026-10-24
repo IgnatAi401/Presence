@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "presence-server",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "--directory", "server", "uvicorn", "presence.main:app", "--host", "127.0.0.1", "--port", "8790", "--no-access-log"],
+      "port": 8790
+    },
+    {
+      "name": "presence-web",
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": ["-lic", "cd web && pnpm exec wrangler dev --port 8788"],
+      "port": 8788
+    }
+  ]
+}

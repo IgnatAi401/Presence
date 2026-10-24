@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // 纯静态站：只上传 public/ 目录，不需要 Worker 脚本
+  "name": "presence-web",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash"
+  },
+  // 绑定 now.ignat.ai（Cloudflare 自动创建 DNS 记录和证书）
+  "routes": [
+    { "pattern": "now.ignat.ai", "custom_domain": true }
+  ],
+  "workers_dev": false,
+  "preview_urls": false
+}

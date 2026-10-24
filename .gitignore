@@ -1,0 +1,28 @@
+# 规划文档只留在本地
+ROADMAP.md
+
+# macOS
+.DS_Store
+Icon?
+
+# Python / uv
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# 服务器运行时数据与真实配置（含设备令牌）
+server/data/
+server/config/settings.toml
+
+# Node / Cloudflare
+node_modules/
+.wrangler/
+.dev.vars*
+.env*
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Now · Ignat</title>
+  <meta name="description" content="Ignat 此刻大致在做什么">
+  <meta name="theme-color" content="#0B0908">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/vt323.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <a class="brand" href="https://ignat.ai">ignat.ai</a>
+      <span class="sep">/</span>
+      <span class="ch">now.</span>
+      <span class="air" id="air" data-state="connecting"><i></i><b id="air-text">TUNING</b></span>
+    </header>
+
+    <section class="screen" aria-live="polite">
+      <p class="kicker" id="kicker">此刻</p>
+      <h1 class="main" id="main-label">……</h1>
+      <p class="meta" id="main-meta"></p>
+      <div id="main-card"></div>
+      <p class="notice" id="notice" hidden>状态服务暂时离线，稍后会自动重连。</p>
+    </section>
+
+    <section class="side" aria-label="伴随状态">
+      <ul id="side"></ul>
+    </section>
+
+    <section class="today" aria-label="今日">
+      <div class="today-head">
+        <h2>今日</h2>
+        <span id="today-date"></span>
+      </div>
+      <div class="bar" id="bar"><span class="cursor" id="cursor"></span></div>
+      <div class="ticks"><span>04:00</span><span>10:00</span><span>16:00</span><span>22:00</span><span>04:00</span></div>
+      <ul class="totals" id="totals"></ul>
+    </section>
+
+    <footer class="foot">
+      <a href="/history">历史</a>
+      <span>数据来自我的 Mac、Windows 和 iPhone，只显示大致类别</span>
+    </footer>
+  </main>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

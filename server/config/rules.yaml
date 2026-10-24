@@ -1,0 +1,51 @@
+# 分类规则与等级（改完重启服务器即可生效，各设备上的小工具不用更新）
+
+# 锚定状态：rank 越小越优先（上课 > 吃饭 / 睡觉）
+anchors:
+  class: { rank: 1, short: "上课", label: "正在上《{course}》" }
+  eat: { rank: 2, short: "吃饭", label: "吃饭中" }
+  sleep: { rank: 2, short: "睡觉", label: "睡觉中" }
+
+# 活动：tier 越小等级越高；serious 表示“正事”（有保持期和摸鱼标记）
+activities:
+  research: { tier: 1, short: "科研", label: "搞科研", serious: true }
+  dev: { tier: 1, short: "开发", label: "搞开发", serious: true }
+  game: { tier: 2, short: "游戏", label: "正在玩《{name}》" }
+  out: { tier: 2, short: "出门", label: "出门" }
+  custom: { tier: 2, short: "自定义", label: "{text}" }
+  video: { tier: 3, short: "看视频", label: "在看视频" }
+  browse: { tier: 3, short: "上网", label: "网上冲浪" }
+  phone: { tier: 4, short: "刷手机", label: "在刷 {app}" }
+  music: { tier: 4, short: "听歌", label: "正在听《{title}》" }
+
+# 1. 项目匹配：从白名单 App 的窗口标题里提取出的项目名
+projects:
+  thesis-sim: research
+  LuGRE-Analysis: research
+  Apex-IgnatAi: dev
+  Presence: dev
+
+# 2. 域名匹配（Safari 在前台时）；子域名自动匹配，例如 www.bilibili.com
+#    reference：资料类，继承最近 10 分钟的正事；未列出的网页同样处理
+domains:
+  overleaf.com: research
+  arxiv.org: reference
+  scholar.google.com: reference
+  github.com: reference
+  stackoverflow.com: reference
+  bilibili.com: video
+  youtube.com: video
+
+# 3. App 默认值（按 bundle id）
+apps:
+  com.mathworks.matlab: research
+  com.microsoft.Powerpoint: research
+  com.apple.iWork.Keynote: research
+  com.github.GitHubClient: dev
+  com.microsoft.VSCode: dev
+  com.anthropic.claudefordesktop: dev
+
+# 显示用的名字（视频网站、手机 App）
+names:
+  bilibili.com: B站
+  youtube.com: YouTube

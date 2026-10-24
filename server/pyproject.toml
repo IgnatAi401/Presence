@@ -1,0 +1,31 @@
+[project]
+name = "presence"
+version = "0.1.0"
+description = "now.ignat.ai 实时状态系统的服务器"
+authors = [
+    { name = "IgnatAi401", email = "154402655+IgnatAi401@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "pyyaml>=6.0",
+    # 读取苹果日历（课表），只在 macOS 上安装
+    "pyobjc-framework-eventkit>=11; sys_platform == 'darwin'",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "httpx>=0.28",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
