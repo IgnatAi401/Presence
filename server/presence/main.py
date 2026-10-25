@@ -171,10 +171,11 @@ class Presence:
         rows.sort(key=lambda r: r[2])
         self.db.insert_signals(rows, now)
         for src, kind, ts, ttl, data in rows:
+            self.db.record_web(src, kind, ts, ttl, data, self.engine.timing.away_sec)
             self.engine.ingest(src, kind, ts, ttl, data)
-            if kind == "video" and isinstance(data.get("site"), str) and isinstance(data.get("id"), str):
+            if kind == "video" and not data.get("private") and isinstance(data.get("site"), str) and isinstance(data.get("id"), str):
                 self.want_video_meta(data["site"], data["id"])
-            if kind == "desktop" and isinstance(data.get("domain"), str) and public_host(data["domain"].lower()):
+            if kind == "desktop" and not (data.get("private") or data.get("hidden")) and isinstance(data.get("domain"), str) and public_host(data["domain"].lower()):
                 self.want_site_icon(data["domain"].lower())
         self.update(now)
         return len(rows)
@@ -368,6 +369,7 @@ class Presence:
 
     def update(self, now: float | None = None) -> None:
         now = self.clock() if now is None else now
+        self.db.expire_web(now)
         self.engine.tick(now)
         self.persist()
         payload = self.payload(self.engine.snapshot(now))
@@ -381,7 +383,7 @@ class Presence:
         self.db.save_intervals(ivs)
         for iv in ivs:
             m = iv.meta.get("media")
-            if m and m["type"] == "video" and not m.get("title"):
+            if m and m["type"] == "video" and not iv.meta.get("private") and not m.get("title"):
                 row = self.cached_video_meta(m["site"], m["vid"])
                 if row is not None and row["title"] is not None:
                     m["title"], m["artist"] = row["title"], row["owner"]

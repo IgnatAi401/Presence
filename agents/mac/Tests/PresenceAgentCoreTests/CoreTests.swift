@@ -265,13 +265,41 @@ import Testing
         let key = s.changeKey(awaySec: 600)
         s.title = "另一篇"
         #expect(s.changeKey(awaySec: 600) != key) // 换网页立即上报
-        let hidden = DesktopState(bundleId: "com.apple.Safari", app: "Safari", hidden: true)
+        let hidden = DesktopState(bundleId: "com.apple.Safari", app: "Safari", domain: "private.example",
+                                  title: "私有页面", hidden: true)
         let data = hidden.signal(ts: 0, ttl: 300).data
-        #expect(data["hidden"] == .bool(true) && data["domain"] == nil && data["title"] == nil)
+        #expect(data["hidden"] == .bool(true) && data["private"] == .bool(true))
+        #expect(data["domain"] == .string("private.example") && data["title"] == .string("私有页面"))
+        var policy = ReportPolicy()
+        #expect(policy.shouldSend(hidden, now: 0, heartbeatSec: 120, awaySec: 600) == true)
+        var next = hidden
+        next.domain = "other.private.example"
+        #expect(policy.shouldSend(next, now: 5, heartbeatSec: 120, awaySec: 600) == true)
     }
 }
 
 @Suite struct VideoTests {
+    @Test func selectedVideoUsesItsOwnPrivacyFlag() {
+        var config = AgentConfig()
+        config.hiddenDomains = ["private.youtube.com"]
+        let publicTab = VideoTab(url: "https://www.youtube.com/watch?v=same", title: "", probe: "1,0,300,1", front: true)
+        let privateTab = VideoTab(url: "https://private.youtube.com/watch?v=same", title: "", probe: "1,0,300,1", front: false)
+        let selected = VideoTab.pick([privateTab, publicTab], isPrivate: { config.hides(host: hostOf($0.url)) })
+        #expect(selected?.isPrivate == false)
+        #expect(VideoTab.pick([privateTab], isPrivate: { config.hides(host: hostOf($0.url)) })?.isPrivate == true)
+    }
+
+    @Test func privateVideoImmediatelyReportsPrivacyChanges() {
+        var state = VideoState(ref: VideoRef(site: "youtube", id: "secret"), playing: true)
+        var policy = PlaybackPolicy<VideoState>()
+        #expect(policy.signal(for: state, now: 0, heartbeatSec: 120, ttl: 300) != nil)
+        state.isPrivate = true
+        state.position = 1
+        let signal = policy.signal(for: state, now: 1, heartbeatSec: 120, ttl: 300)
+        #expect(signal?.data["private"] == .bool(true))
+        #expect(signal?.data["id"] == .string("secret"))
+    }
+
     @Test func parseBilibili() {
         #expect(VideoRef.parse("https://www.bilibili.com/video/BV1xx411c7mD/?spm_id_from=333")
             == VideoRef(site: "bilibili", id: "BV1xx411c7mD"))

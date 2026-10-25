@@ -91,8 +91,8 @@ class Rules:
         domain = (data.get("domain") or "").lower() or None
         bundle = data.get("bundle_id") or ""
 
-        if data.get("hidden"):
-            return Classified("browse")  # 小工具黑名单里的网站：不知道是哪个网站，只算上网
+        if data.get("private") or data.get("hidden"):
+            return Classified("browse")  # 私有网站公开状态只算上网，不按具体域名分类
 
         if project and project in self.projects:
             return Classified(self.projects[project], project=project)

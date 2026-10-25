@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -88,6 +89,7 @@ def timeline(segs: list[dict[str, Any]], rules: Rules) -> list[dict[str, Any]]:
 def today(db: DB, rules: Rules, now: float, tz: ZoneInfo, start_hour: int) -> dict[str, Any]:
     a, b, date = day_bounds(now, tz, start_hour)
     segs = _clip(db.segments_between(a, b), a, b, now)
+    segs = [s for s in segs if not json.loads(s["meta_json"]).get("private")]
     return {
         "date": date,
         "start": a,

@@ -133,6 +133,22 @@ MIGRATIONS = [
     INSERT INTO media_log (id, type, key, title, play, start, end, source)
     SELECT id, 'app', app, app, id, start, end, source FROM phone WHERE app != '';
     """,
+    """
+    ALTER TABLE media_log ADD COLUMN private INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE web_log (
+        id INTEGER PRIMARY KEY,
+        source TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        title TEXT,
+        private INTEGER NOT NULL DEFAULT 0,
+        start REAL NOT NULL,
+        end REAL,
+        last_seen REAL NOT NULL,
+        expires REAL NOT NULL
+    );
+    CREATE INDEX web_log_start ON web_log (start);
+    CREATE UNIQUE INDEX web_log_open ON web_log (source) WHERE end IS NULL;
+    """,
 ]
 
 
@@ -190,6 +206,7 @@ class DB:
 
     def close_dangling(self, at: float) -> int:
         """启动时：上次没结束的片段截止到最后一条信号的时间，停机时间不算进任何类别。"""
+        self.conn.execute("UPDATE web_log SET end = MAX(start, last_seen) WHERE end IS NULL")
         self.conn.execute("UPDATE media_log SET end = MAX(start, ?) WHERE end IS NULL", (at,))
         return self.conn.execute(
             "UPDATE segments SET end = MAX(start, ?) WHERE end IS NULL", (at,)
@@ -198,6 +215,53 @@ class DB:
     def segments_between(self, start: float, end: float) -> list[sqlite3.Row]:
         return self.conn.execute(
             "SELECT * FROM segments WHERE start < ? AND (end IS NULL OR end > ?) ORDER BY start",
+            (end, start),
+        ).fetchall()
+
+    # -- web_log（独立于活动分类，换网站 / 标题立即拆段，长期保留）
+
+    def expire_web(self, now: float) -> None:
+        self.conn.execute("UPDATE web_log SET end = MAX(start, last_seen) WHERE end IS NULL AND expires < ?", (now,))
+
+    def record_web(self, source: str, kind: str, ts: float, ttl: float, data: dict, away_sec: float) -> None:
+        if kind not in ("desktop", "heartbeat"):
+            return
+        row = self.conn.execute("SELECT * FROM web_log WHERE source = ? AND end IS NULL", (source,)).fetchone()
+        if row is not None and ts < row["last_seen"]:
+            return  # 补发的旧信号不能覆盖较新的浏览记录
+        if row is not None and ts > row["expires"]:
+            self.conn.execute("UPDATE web_log SET end = MAX(start, last_seen) WHERE id = ?", (row["id"],))
+            row = None
+        if kind == "heartbeat":
+            if row is not None:
+                self.conn.execute("UPDATE web_log SET last_seen = ?, expires = ? WHERE id = ?",
+                                  (ts, ts + ttl, row["id"]))
+            return
+        idle = float(data.get("idle_sec") or 0)
+        active = not data.get("locked") and idle < away_sec
+        domain = data.get("domain") if data.get("bundle_id") == "com.apple.Safari" and active else None
+        domain = domain.lower() if isinstance(domain, str) and domain else None
+        title = data.get("title")
+        title = title[:200] if isinstance(title, str) and title else None
+        private = bool(data.get("private") or data.get("hidden"))
+        if row is not None:
+            if domain and (row["domain"], row["title"], row["private"]) == (domain, title, private):
+                self.conn.execute("UPDATE web_log SET last_seen = ?, expires = ? WHERE id = ?",
+                                  (ts, ts + ttl, row["id"]))
+                return
+            end = ts - idle if idle >= away_sec and not data.get("locked") else ts
+            self.conn.execute("UPDATE web_log SET end = MAX(start, ?) WHERE id = ?", (end, row["id"]))
+        if domain:
+            self.conn.execute(
+                "INSERT INTO web_log (source, domain, title, private, start, last_seen, expires) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (source, domain, title, int(private), ts, ts, ts + ttl),
+            )
+
+    def web_history(self, start: float, end: float) -> list[sqlite3.Row]:
+        """仅供私有查询；时间范围内的浏览明细，保留真实开始 / 结束时间。"""
+        return self.conn.execute(
+            "SELECT id, source, domain, title, private, start, end FROM web_log "
+            "WHERE start < ? AND (end IS NULL OR end > ?) ORDER BY start DESC, id DESC",
             (end, start),
         ).fetchall()
 
@@ -210,11 +274,11 @@ class DB:
             m = iv.meta.get("media")
             if m:
                 rows.append((iv.id, m["type"], m["key"], m.get("title"), m.get("artist"), m.get("album"),
-                             m.get("player") or m.get("site"), m.get("page"), m["play"], iv.start, iv.end, iv.source))
+                             m.get("player") or m.get("site"), m.get("page"), m["play"], iv.start, iv.end, iv.source, int(bool(iv.meta.get("private")))))
         self.conn.executemany(
             """
-            INSERT INTO media_log (id, type, key, title, artist_or_owner, album, player, page, play, start, end, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO media_log (id, type, key, title, artist_or_owner, album, player, page, play, start, end, source, private)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (id) DO UPDATE SET end = excluded.end,
                 title = COALESCE(excluded.title, title), artist_or_owner = COALESCE(excluded.artist_or_owner, artist_or_owner)
             """,
@@ -245,7 +309,7 @@ class DB:
         """[start, end) 内的播放记录，按开始时间倒序；暂停拆开的几段合成一次播放。"""
         return self.conn.execute(
             """
-            SELECT play, key, MAX(title) AS title, MAX(artist_or_owner) AS artist, MAX(album) AS album,
+            SELECT play, key, MAX(private) AS private, MAX(title) AS title, MAX(artist_or_owner) AS artist, MAX(album) AS album,
                    MAX(player) AS player, MAX(page) AS page, MAX(source) AS source, MIN(start) AS start,
                    CASE WHEN COUNT(end) = COUNT(*) THEN MAX(end) END AS end,
                    SUM(COALESCE(end, ?) - start) AS seconds

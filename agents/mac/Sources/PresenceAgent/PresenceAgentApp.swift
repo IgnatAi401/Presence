@@ -114,7 +114,7 @@ struct SettingsView: View {
             Section("不公开的网站") {
                 TextField("每行一个域名，例如 zhihu.com", text: $hiddenDomains, axis: .vertical)
                     .lineLimit(3 ... 8)
-                Text("这些网站（含子域名）不上报域名、标题和视频，网页上只显示“网上冲浪”。改完点上面的“保存”。")
+                Text("这些网站（含子域名）的域名、标题和视频会私有保存到服务器，公开网页只显示“网上冲浪”，供以后自己回看。改完点上面的“保存”。")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("权限") {

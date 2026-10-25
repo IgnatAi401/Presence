@@ -433,3 +433,91 @@ def test_video_history_fills_title_later(env):
     top = [dict(r) for r in p.db.media_totals("video", T0, clock.t)]
     assert [(t["key"], t["seconds"], t["plays"]) for t in top] == [("bilibili:BV1xx411c7mD", 200, 2),
                                                                      ("youtube:dQw4w9WgXcQ", 50, 1)]
+
+
+def test_private_web_history_survives_pruning_and_never_public(env):
+    client, clock, _ = env
+    p = client.app.state.presence
+    icons = []
+    p.fetch_icon = lambda domain, limit: icons.append(domain)
+    for offset, domain, title in [(0, "secret.example", "私有页面"), (20, "other.example", "另一个页面")]:
+        clock.t = T0 + offset
+        post(client, [{"kind": "desktop", "data": {"bundle_id": "com.apple.Safari", "domain": domain,
+                      "title": title, "private": True}}])
+        public = client.get("/presence/api/now").text + client.get("/presence/api/today").text
+        assert domain not in public and title not in public
+        assert client.get("/presence/api/now").json()["main"]["category"] == "browse"
+    clock.t += 20
+    post(client, [{"kind": "desktop", "data": {"bundle_id": "com.mathworks.matlab"}}])
+    p.db.prune_signals(clock.t + 1)
+    rows = p.db.web_history(T0, clock.t)
+    assert [(r["domain"], r["title"], r["private"], r["end"] - r["start"]) for r in rows] == [
+        ("other.example", "另一个页面", 1, 20), ("secret.example", "私有页面", 1, 20)]
+    assert not icons
+
+
+def test_web_history_records_changes_and_expires(env):
+    client, clock, _ = env
+    p = client.app.state.presence
+    def browse(offset, title="页面 A", **extra):
+        clock.t = T0 + offset
+        post(client, [{"kind": "desktop", "ttl": 300, "data": {"bundle_id": "com.apple.Safari",
+                      "domain": "docs.example", "title": title, **extra}}])
+    browse(0)
+    browse(120)
+    browse(130, "页面 B")  # 同一个活动里切网页也拆分历史
+    browse(140, "页面 B", private=True)
+    clock.t = T0 + 200
+    post(client, [{"kind": "heartbeat"}])
+    clock.t = T0 + 501
+    p.update()
+    rows = p.db.web_history(T0, clock.t)
+    assert [(r["title"], r["private"], r["start"] - T0, r["end"] - T0) for r in rows] == [
+        ("页面 B", 1, 140, 200), ("页面 B", 0, 130, 140), ("页面 A", 0, 0, 130)]
+
+
+def test_private_video_is_recorded_without_public_card_or_fetch(env):
+    client, clock, _ = env
+    p = client.app.state.presence
+    calls = []
+    p.fetch_video_meta = lambda site, vid: calls.append(vid)
+    post(client, [{"kind": "video", "data": {"site": "youtube", "id": "private-id", "state": "playing", "private": True}}])
+    clock.t += 30
+    post(client, [{"kind": "video", "data": {"site": "youtube", "id": "private-id", "state": "paused", "private": True}}])
+    public = client.get("/presence/api/now").text + client.get("/presence/api/today").text
+    assert "private-id" not in public and '"video"' not in public
+    rows = p.db.media_history("video", T0, clock.t)
+    assert len(rows) == 1 and rows[0]["seconds"] == 30 and rows[0]["private"] == 1
+    assert not calls
+
+
+def test_video_privacy_toggle_hides_active_and_linger(env):
+    client, clock, _ = env
+    for offset, private, state in [(0, False, "playing"), (10, False, "paused"), (20, True, "playing")]:
+        clock.t = T0 + offset
+        post(client, [{"kind": "video", "data": {"site": "youtube", "id": "toggle", "state": state, "private": private}}])
+    assert "toggle" not in client.get("/presence/api/now").text
+
+
+def test_web_history_lock_idle_restart_and_legacy_privacy(env):
+    client, clock, _ = env
+    db = client.app.state.presence.db
+    data = {"bundle_id": "com.apple.Safari", "domain": "private.example", "title": "私有", "hidden": True}
+    db.record_web("mac", "desktop", T0, 3600, data, 600)
+    db.record_web("mac", "desktop", T0 + 60, 3600, {**data, "locked": True}, 600)
+    db.record_web("mac", "desktop", T0 + 100, 3600, data, 600)
+    db.record_web("mac", "desktop", T0 + 800, 3600, {**data, "idle_sec": 650}, 600)
+    db.record_web("mac", "desktop", T0 + 900, 3600, data, 600)
+    db.record_web("mac", "heartbeat", T0 + 1000, 3600, {}, 600)
+    db.close_dangling(T0 + 1100)
+    rows = db.web_history(T0, T0 + 1200)
+    assert [(r["start"] - T0, r["end"] - T0, r["private"]) for r in rows] == [
+        (900, 1000, 1), (100, 150, 1), (0, 60, 1)]
+
+
+def test_paused_video_privacy_change_removes_public_linger(env):
+    client, clock, _ = env
+    for offset, private, state in [(0, False, "playing"), (10, False, "paused"), (20, True, "paused")]:
+        clock.t = T0 + offset
+        post(client, [{"kind": "video", "data": {"site": "youtube", "id": "toggle-paused", "state": state, "private": private}}])
+    assert "toggle-paused" not in client.get("/presence/api/now").text

@@ -60,6 +60,7 @@ public struct VideoState: PlaybackState {
     /// 播放倍速（B站常开 1.5 / 2 倍），用来推算进度
     public var rate: Double
     public var viewing: VideoViewing
+    public var isPrivate: Bool = false
 
     public init(ref: VideoRef, title: String = "", duration: Double = 0, position: Double = 0,
                 playing: Bool, rate: Double = 1, viewing: VideoViewing = .video) {
@@ -74,7 +75,7 @@ public struct VideoState: PlaybackState {
 
     /// 换视频、换分 P、切到评论区时立即上报；标签页标题会变（YouTube 有未读数），不算
     public var changeKey: String {
-        [ref.site, ref.id, ref.page.map(String.init) ?? "", viewing.rawValue].joined(separator: "\u{1F}")
+        [ref.site, ref.id, ref.page.map(String.init) ?? "", viewing.rawValue, isPrivate ? "private" : ""].joined(separator: "\u{1F}")
     }
 
     /// 暂停着但在看评论区，也算还在看这个视频
@@ -93,6 +94,7 @@ public struct VideoState: PlaybackState {
             "position": .number((position * 10).rounded() / 10),
             "duration": .number((duration * 10).rounded() / 10),
         ]
+        if isPrivate { data["private"] = .bool(true) }
         if let page = ref.page { data["page"] = .number(Double(page)) }
         if rate != 1 { data["rate"] = .number(rate) }
         if viewing == .comments { data["viewing"] = .string(viewing.rawValue) }
@@ -131,8 +133,12 @@ public struct VideoTab: Equatable, Sendable {
 
     /// 选出要上报的视频：正在播放的优先（最前面的标签页再优先）；都没在放时只看最前面的标签页。
     /// 后台标签页里暂停着的视频不算在看。
-    public static func pick(_ tabs: [VideoTab]) -> VideoState? {
-        let states = tabs.compactMap { tab in tab.state.map { (tab.front, $0) } }
+    public static func pick(_ tabs: [VideoTab], isPrivate: (VideoTab) -> Bool = { _ in false }) -> VideoState? {
+        let states = tabs.compactMap { tab in tab.state.map {
+            var state = $0
+            state.isPrivate = isPrivate(tab)
+            return (tab.front, state)
+        } }
         return states.first { $0.0 && $0.1.playing }?.1
             ?? states.first { $0.1.playing }?.1
             ?? states.first { $0.0 }?.1

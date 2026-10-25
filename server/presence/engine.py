@@ -213,7 +213,7 @@ class MacTracker:
         self.expires = max(self.expires or 0, ts + ttl)
 
         host = (data.get("domain") or "").lower()
-        self.page = (host, data.get("title") or None) if public_host(host) and not data.get("hidden") else None
+        self.page = (host, data.get("title") or None) if public_host(host) and not (data.get("private") or data.get("hidden")) else None
 
         idle_sec = float(data.get("idle_sec") or 0)
         if data.get("locked"):
@@ -556,19 +556,23 @@ class Engine:
 
         cur = self.feeds.get(key)
         session = None
-        if cur and (not active or cur.identity != identity or ts > cur.expires):
+        privacy_changed = cur is not None and bool(cur.data.get("private")) != bool(data.get("private"))
+        if cur and (not active or cur.identity != identity or ts > cur.expires or privacy_changed):
             if active and ts <= cur.expires:
                 session = cur.session  # 直接换歌
             if ts > cur.expires:
                 self._end_feed(key, cur.expires if category == "phone" else cur.last_ts)
             else:
                 # 主动停止（暂停、关闭）才留余温；换歌、换 App 直接替换
-                stopped = not active and cur.identity == identity
+                stopped = not active and cur.identity == identity and not privacy_changed
                 cur.data = {**cur.data, **data}
                 cur.last_ts = cur.data_ts = ts  # 卡片的 updated_at 对应暂停那一刻的进度
                 self._end_feed(key, ts, linger=stopped and category != "phone")
             cur = None
         if not active:
+            prev = self.ended.get(key)
+            if prev is not None and bool(prev.data.get("private")) != bool(data.get("private")):
+                self.ended.pop(key)
             return
         if cur:
             cur.data, cur.last_ts, cur.data_ts, cur.expires = data, ts, ts, ts + ttl
@@ -576,7 +580,8 @@ class Engine:
         prev = self.ended.pop(key, None)
         if prev is not None and ts < (prev.until or 0):
             session = session or prev.session  # 暂停后在余温内继续（同一首或下一首）
-        if prev is not None and (prev.identity != identity or ts >= (prev.until or 0)):
+        if prev is not None and (prev.identity != identity or ts >= (prev.until or 0)
+                                 or bool(prev.data.get("private")) != bool(data.get("private"))):
             prev = None
         tier = self.rules.tier(category)
         for k, f in list(self.ended.items()):
@@ -585,6 +590,8 @@ class Engine:
         detail = data.get("name") if category == "game" else None
         interrupted = prev is not None and ts - (prev.interval.end or ts) >= self.timing.enter_sec
         meta: dict[str, Any] = {"resumed": True} if interrupted else {}
+        if data.get("private"):
+            meta["private"] = True
         iv = self.open(ACTIVITY, category, ts, source=source, detail=detail, meta=meta)
         if media := _media_meta(category, data, identity):
             # 暂停后在余温内继续同一首（同一个游戏、同一个视频），算同一次播放
@@ -725,7 +732,7 @@ class Engine:
             if m := self.manual.get(slot):
                 anchors.append(self._anchor_item(m.state, m.start, None))
 
-        feeds = [*self.feeds.values(), *self.ended.values()]
+        feeds = [f for f in (*self.feeds.values(), *self.ended.values()) if not f.data.get("private")]
         acts: list[Item] = self.mac.items()
         site_since = None  # 被视频卡片取代的“在看 B站”从什么时候开始
         if any(f.category == "video" and f.source == self.mac.source for f in feeds):

@@ -146,12 +146,9 @@ final class AgentModel: ObservableObject {
                 case let .page(url, title):
                     safariDenied = false
                     let host = hostOf(url)
-                    if config.hides(host: host) {
-                        state.hidden = true
-                    } else {
-                        state.domain = host
-                        state.title = host == nil ? nil : title
-                    }
+                    state.hidden = config.hides(host: host)
+                    state.domain = host
+                    state.title = host == nil ? nil : title
                 case .denied:
                     safariDenied = true
                 }
@@ -205,7 +202,7 @@ final class AgentModel: ObservableObject {
         case let .tabs(tabs):
             safariDenied = false
             videoBlocked = false
-            state = VideoTab.pick(tabs.filter { !config.hides(host: hostOf($0.url)) })
+            state = VideoTab.pick(tabs, isPrivate: { config.hides(host: hostOf($0.url)) })
         case .blocked:
             videoBlocked = true
         case .denied:

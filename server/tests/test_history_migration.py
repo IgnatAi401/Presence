@@ -8,9 +8,10 @@ from presence.db import DB, MIGRATIONS
 def test_backfill_phone_history_and_reopen(tmp_path):
     path = tmp_path / "old.db"
     conn = sqlite3.connect(path)
-    for sql in MIGRATIONS[:-1]:
+    previous_version = next(i for i, sql in enumerate(MIGRATIONS) if "WITH phone AS" in sql)
+    for sql in MIGRATIONS[:previous_version]:
         conn.executescript(sql)
-    conn.execute(f"PRAGMA user_version = {len(MIGRATIONS) - 1}")
+    conn.execute(f"PRAGMA user_version = {previous_version}")
     conn.executemany(
         "INSERT INTO segments (id, line, category, start, end, source) VALUES (?, 'activity', 'phone', ?, ?, ?)",
         [("known", 100, 160, "iphone"), ("missing", 200, 260, "iphone")],

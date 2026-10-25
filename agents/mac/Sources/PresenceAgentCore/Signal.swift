@@ -58,7 +58,7 @@ public struct DesktopState: Equatable, Sendable {
     public var domain: String?
     /// Safari 当前网页的标题（最多 200 字）
     public var title: String?
-    /// Safari 当前网站在黑名单里：域名和标题都不上报
+    /// Safari 当前网站仅私有记录：仍上报域名和标题，公开页隐藏详情
     public var hidden: Bool
     public var idleSec: Double
     public var locked: Bool
@@ -90,8 +90,11 @@ public struct DesktopState: Equatable, Sendable {
         ]
         if let project { data["project"] = .string(project) }
         if let domain { data["domain"] = .string(domain) }
-        if let title, !title.isEmpty { data["title"] = .string(title) }
-        if hidden { data["hidden"] = .bool(true) }
+        if let title, !title.isEmpty { data["title"] = .string(String(title.prefix(200))) }
+        if hidden {
+            data["private"] = .bool(true)
+            data["hidden"] = .bool(true) // 兼容旧服务器，避免升级期间公开详情
+        }
         if locked { data["locked"] = .bool(true) }
         return Signal(kind: "desktop", ts: ts, ttl: ttl, data: data)
     }
