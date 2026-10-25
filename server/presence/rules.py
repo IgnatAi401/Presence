@@ -25,6 +25,7 @@ class ActivityDef:
     short: str = ""
     serious: bool = False
     keep_min: float = 0  # 离开后继续显示多久（余温）
+    show_project: bool = False  # 公开显示工作区文件夹名（项目名）
 
 
 @dataclass(frozen=True)

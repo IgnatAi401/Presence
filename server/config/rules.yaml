@@ -11,9 +11,10 @@ anchors:
 # 活动：tier 越小等级越高；serious 表示“正事”（余温期间显示摸鱼标记）
 # keep_min：离开后在页面上继续保留多久（余温），只影响显示，不计入时长；
 #           切到同一等级的活动时立刻消失。出门、自定义有自己的有效期，不需要
+# show_project：公开显示工作区文件夹名（VS Code 窗口标题、Claude Code / Codex 会话里识别出的项目名）
 activities:
-  research: { tier: 1, short: "科研", label: "搞科研", keep_min: 10, serious: true }
-  dev: { tier: 1, short: "开发", label: "搞开发", keep_min: 10, serious: true }
+  research: { tier: 1, short: "科研", label: "搞科研", keep_min: 10, serious: true, show_project: true }
+  dev: { tier: 1, short: "开发", label: "搞开发", keep_min: 10, serious: true, show_project: true }
   game: { tier: 2, short: "游戏", label: "正在玩《{name}》", keep_min: 3 }
   out: { tier: 2, short: "出门", label: "出门" }
   custom: { tier: 2, short: "自定义", label: "{text}" }

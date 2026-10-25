@@ -696,6 +696,8 @@ class Engine:
         label = _fmt(d.label, **(values or {})) if d else category
         if category == "video" and values and values.get("name"):
             label = f"在看 {values['name']}"
+        if d and d.show_project and kw.get("project") and not kw.get("detail"):
+            kw["detail"] = kw["project"]  # 搞科研 / 搞开发时公开工作区文件夹名
         return Item(type=ACTIVITY, category=category, label=label or category, since=since,
                     tier=d.tier if d else 9, **kw)
 
@@ -760,6 +762,7 @@ class Engine:
         main.activity = d.activity
         main.slacking_since = it.slacking_since
         main.project = it.project
+        main.detail = it.detail
 
     def _feed_item(self, f: Feed) -> Item:
         d = f.data

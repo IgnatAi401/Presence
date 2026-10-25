@@ -80,6 +80,14 @@ def test_project_overrides_app_default():
     assert s.main.category == "dev"
 
 
+def test_project_shown_publicly_for_research_and_dev():
+    s = Sim().mac(0, {**VSCODE, "project": "unknown-proj"}).snap(1)
+    assert s.public()["main"]["detail"] == "unknown-proj" and "project" not in s.public()["main"]
+    s = Sim().manual(0, "office").mac(0, {**VSCODE, "project": "thesis-sim"}).snap(1)
+    assert (s.main.category, s.main.detail) == ("office", "thesis-sim")
+    assert "detail" not in Sim().mac(0, VSCODE).snap(1).public()["main"]
+
+
 def test_unknown_app_keeps_current():
     sim = Sim().mac(0, MATLAB).mac(30, FINDER)
     assert sim.snap(500).main.category == "research"
