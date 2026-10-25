@@ -44,6 +44,7 @@ apps:
   com.github.GitHubClient: dev
   com.microsoft.VSCode: dev
   com.anthropic.claudefordesktop: dev
+  com.openai.codex: dev
 
 # 显示用的名字（视频网站、手机 App）
 names:

@@ -26,3 +26,7 @@ node_modules/
 xcuserdata/
 DerivedData/
 *.xcuserstate
+
+# Mac 小工具构建产物
+agents/mac/.build/
+agents/mac/build/

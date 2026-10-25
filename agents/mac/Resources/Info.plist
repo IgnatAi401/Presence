@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh_CN</string>
+	<key>CFBundleExecutable</key>
+	<string>PresenceAgent</string>
+	<key>CFBundleIdentifier</key>
+	<string>ai.ignat.presence.agent</string>
+	<key>CFBundleName</key>
+	<string>Presence</string>
+	<key>CFBundleDisplayName</key>
+	<string>Presence</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<!-- 只在菜单栏显示，不出现在程序坞 -->
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>读取 Safari 当前标签页的网址，只上报域名，用来判断在查资料、写论文还是看视频。</string>
+	<!-- 允许连接本机调试服务器 http://127.0.0.1:8790 -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

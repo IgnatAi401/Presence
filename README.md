@@ -6,7 +6,7 @@
 | --- | --- |
 | `server/` | FastAPI 后端（uv 管理）：信号接收、状态引擎、SQLite、公开接口、SSE 推送 |
 | `web/` | now.ignat.ai 静态站（Cloudflare Worker `presence-web`，pnpm 管理 wrangler） |
-| `agents/` | 各设备上的上报小工具（待开发） |
+| `agents/mac/` | Mac 菜单栏小工具（Swift，见其 README） |
 | `shortcuts/` | iPhone 快捷指令（待开发） |
 
 ## 服务器
