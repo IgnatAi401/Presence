@@ -20,9 +20,8 @@ iphone = ""
 
 # 状态引擎的阈值（单位：秒 / 分钟 / 小时，见变量名），不写就用默认值
 [engine]
-debounce_sec = 90
+enter_sec = 10                     # 切到新活动停留这么久才显示，更短的切换当作没发生
 away_sec = 600
-hold_sec = 1200
 context_sec = 600
 eat_min = 60
 sleep_max_h = 14

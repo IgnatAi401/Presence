@@ -105,40 +105,76 @@ def test_reference_inherits_research():
     assert len(sim.segments("research")) == 1
 
 
-def test_reference_during_hold_resumes_serious():
+def test_reference_during_linger_resumes_serious():
     sim = Sim().mac(0, MATLAB).mac(600, safari("www.bilibili.com"))
     sim.mac(900, safari("github.com"))
     s = sim.snap(1000)
     assert cats(s) == ("research", []) and s.main.detail == "查资料" and s.main.slacking_since is None
 
 
-def test_reference_after_hold_expired_is_browse():
+def test_reference_after_linger_expired_is_browse():
     sim = Sim().mac(0, MATLAB).mac(600, safari("www.bilibili.com"))
     assert sim.snap(1801).main.category == "video"
     sim.mac(1900, safari("github.com"))
     assert sim.snap(2000).main.category == "browse"
 
 
-# ---------------------------------------------------------------- 防抖
+# ---------------------------------------------------------------- 进入与余温
 
 
-def test_short_switch_is_ignored():
-    sim = Sim().mac(0, VSCODE).mac(100, safari("www.bilibili.com")).mac(160, VSCODE)
-    s = sim.snap(400)
-    assert cats(s) == ("dev", [])
-    assert [iv.category for iv in sim.segments()] == ["dev"]
+def test_switch_shows_after_enter_delay():
+    sim = Sim().mac(0, VSCODE).mac(100, safari("www.bilibili.com"))
+    assert cats(sim.snap(105)) == ("dev", [])
+    s = sim.snap(110)
+    assert cats(s) == ("dev", ["video"]) and s.main.slacking_since == T0 + 100
+    assert s.side[0].since == T0 + 100  # 从切过去的那一刻算起
+    assert sim.segments("dev")[0].end == T0 + 100
 
 
-def test_switch_commits_after_debounce_backdated():
+def test_same_tier_replaces_immediately():
+    sim = Sim().mac(0, MATLAB).mac(100, VSCODE)
+    assert cats(sim.snap(110)) == ("dev", [])
     sim = Sim().mac(0, safari("www.youtube.com")).mac(100, safari("example.com"))
-    assert sim.snap(150).main.category == "video"
-    s = sim.snap(200)
-    assert s.main.category == "browse" and s.main.since == T0 + 100
-    video, browse = sim.segments("video")[0], sim.segments("browse")[0]
-    assert video.end == T0 + 100 and browse.start == T0 + 100
+    assert cats(sim.snap(110)) == ("browse", [])
+    assert sim.segments("video")[0].end == T0 + 100
 
 
-# ---------------------------------------------------------------- 摸鱼与保持期
+def test_low_tier_lingers_one_minute():
+    sim = Sim().mac(0, safari("www.bilibili.com")).mac(100, MATLAB)
+    s = sim.snap(130)
+    assert cats(s) == ("research", ["video"]) and s.side[0].label == "在看 B站"
+    assert s.main.slacking_since is None
+    assert cats(sim.snap(161)) == ("research", [])
+    assert sim.segments("video")[0].end == T0 + 100  # 余温不计入时长
+
+
+def test_return_within_linger_continues():
+    sim = Sim().mac(0, safari("www.bilibili.com")).mac(100, VSCODE).mac(130, safari("www.bilibili.com"))
+    s = sim.snap(140)
+    assert s.main.category == "dev" and s.main.slacking_since == T0 + 130
+    assert s.side[0].category == "video" and s.side[0].since == T0
+
+
+def test_glance_is_ignored():
+    # 瞄一眼 B站 5 秒就回来：页面不闪，统计里也不出现
+    sim = Sim().mac(0, MATLAB).mac(600, safari("www.bilibili.com"))
+    assert cats(sim.snap(604)) == ("research", [])
+    sim.mac(605, MATLAB)
+    s = sim.snap(700)
+    assert cats(s) == ("research", []) and s.main.since == T0
+    assert [iv.category for iv in sim.segments()] == ["research"]
+
+
+def test_alternating_serious_drops_old_video():
+    # 关掉 B站后在 MATLAB 和 VS Code 之间来回切：B站一分钟后消失
+    sim = Sim().mac(0, safari("www.bilibili.com"))
+    for i, t in enumerate(range(100, 200, 10)):
+        sim.mac(t, MATLAB if i % 2 == 0 else VSCODE)
+    s = sim.snap(195)
+    assert s.main.category == "research" and s.side == []  # 停够 10 秒的最后一个是 180 秒的 MATLAB
+
+
+# ---------------------------------------------------------------- 摸鱼与正事余温
 
 
 def test_slacking_then_return():
@@ -160,24 +196,24 @@ def test_slacking_then_return():
     assert research[1].meta == {"resumed": True}
 
 
-def test_slacking_expires_after_hold():
+def test_slacking_expires_after_linger():
     sim = Sim().mac(0, MATLAB).mac(600, safari("www.bilibili.com"))
     for t in range(720, 2400, 120):
         sim.mac(t, safari("www.bilibili.com"))
-    s = sim.snap(600 + 1200 + 1)
+    s = sim.snap(600 + 600 + 1)
     assert cats(s) == ("video", [])
     slack = sim.segments("research", slacking=True)[0]
-    assert slack.end == T0 + 1800
+    assert slack.end == T0 + 1200
 
 
-def test_idle_ends_serious_without_hold():
+def test_idle_ends_serious_without_linger():
     sim = Sim().mac(0, MATLAB).mac(1200, MATLAB, idle=650)
     s = sim.snap(1210)
     assert (s.main.category) == "away"
     assert sim.segments("research")[0].end == T0 + 550
 
 
-def test_switch_to_other_serious_ends_hold():
+def test_switch_to_other_serious_ends_linger():
     sim = Sim().mac(0, MATLAB).mac(600, safari("www.bilibili.com"))
     sim.snap(700)
     sim.mac(800, VSCODE)
@@ -284,6 +320,58 @@ def test_wake_ends_sleep():
     assert sim.segments("sleep")[0].end == T0 + 100
 
 
+# ---------------------------------------------------------------- 办公室
+
+
+def test_office_folds_research_and_lists_dev():
+    sim = Sim().manual(0, "office").mac(10, MATLAB, ttl=6000)
+    s = sim.snap(20)
+    assert cats(s) == ("office", []) and s.main.label == "在办公室搞科研"
+    assert s.main.activity == "research" and s.main.since == T0
+    sim.mac(100, VSCODE)
+    assert cats(sim.snap(110)) == ("office", ["dev"])
+
+
+def test_office_shows_slacking():
+    sim = Sim().manual(0, "office").mac(10, MATLAB, ttl=6000).mac(600, safari("www.bilibili.com"))
+    s = sim.snap(610)
+    assert cats(s) == ("office", ["video"]) and s.main.slacking_since == T0 + 600
+    assert s.public()["main"]["slacking"] == {"since": T0 + 600}
+
+
+def test_office_survives_idle_and_ranks_below_eat():
+    sim = Sim().manual(0, "office").mac(10, MATLAB, ttl=6000).mac(1200, MATLAB, idle=900, ttl=6000)
+    assert cats(sim.snap(1210)) == ("office", [])
+    sim.manual(1300, "eat")
+    assert cats(sim.snap(1310)) == ("eat", ["office"])
+    sim.manual(1400, "clear")
+    assert sim.snap(1410).main.category == "away"
+
+
+def test_leave_office_and_max_duration():
+    sim = Sim().manual(0, "office").manual(100, "leave_office")
+    assert sim.snap(110).main.category != "office"
+    assert sim.segments("office")[0].end == T0 + 100
+    sim = Sim().manual(0, "office")
+    assert sim.snap(12 * 3600 - 1).main.category == "office"
+    assert sim.snap(12 * 3600 + 1).main.category != "office"
+
+
+def test_office_and_out_end_each_other_sleep_ends_office():
+    sim = Sim().manual(0, "out", text="出去玩").manual(100, "office")
+    assert cats(sim.snap(110)) == ("office", [])
+    sim.manual(200, "out")
+    assert sim.snap(210).main.category == "out"
+    sim.manual(300, "office").manual(400, "sleep")
+    assert cats(sim.snap(410)) == ("sleep", [])
+
+
+def test_class_outranks_office():
+    sim = Sim().manual(0, "office")
+    sim.e.set_courses([course(100, 3000)], T0 + 50)
+    assert cats(sim.snap(200)) == ("class", ["office"])
+
+
 # ---------------------------------------------------------------- 信号类活动
 
 
@@ -297,7 +385,28 @@ def test_music_feed_and_track_change():
     e.ingest("windows", "music", T0 + 100, 300, {"title": "B", "artist": "x", "state": "playing"})
     assert len(sim.segments("music")) == 2
     e.ingest("windows", "music", T0 + 200, 300, {"title": "B", "artist": "x", "state": "paused"})
-    assert cats(sim.snap(210)) == ("dev", [])
+    s = sim.snap(210)
+    assert cats(s) == ("dev", ["music"]) and s.side[0].card["state"] == "paused"
+    assert cats(sim.snap(261)) == ("dev", [])
+    assert sim.segments("music")[1].end == T0 + 200
+
+
+def test_music_resume_within_linger_keeps_since():
+    e = (sim := Sim()).e
+    e.ingest("windows", "music", T0, 300, {"title": "A", "state": "playing"})
+    e.ingest("windows", "music", T0 + 100, 300, {"title": "A", "state": "paused"})
+    e.ingest("windows", "music", T0 + 130, 300, {"title": "A", "state": "playing"})
+    s = sim.snap(140)
+    assert s.main.since == T0 and s.main.card["state"] == "playing"
+    assert sim.segments("music")[1].meta == {"resumed": True}
+
+
+def test_game_lingers_three_minutes():
+    e = (sim := Sim()).e
+    e.ingest("windows", "game", T0, 3600, {"name": "Hades", "event": "start"})
+    e.ingest("windows", "game", T0 + 600, 3600, {"name": "Hades", "event": "stop"})
+    assert sim.snap(779).main.category == "game"
+    assert sim.snap(781).main.category == "away"
 
 
 def test_only_music_is_main():
@@ -314,7 +423,8 @@ def test_phone_app_switch_and_close():
     s = sim.snap(70)
     assert s.main.label == "在刷 Instagram" and s.side == []
     e.ingest("iphone", "phone_app", T0 + 100, 1800, {"app": "Instagram", "event": "close"})
-    assert sim.snap(110).main.category == "away"
+    assert sim.snap(110).main.label == "在刷 Instagram"
+    assert sim.snap(161).main.category == "away"
 
 
 @pytest.mark.parametrize("tier_order", [("research", "game", "video", "music")])

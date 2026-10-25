@@ -15,6 +15,7 @@ class AnchorDef:
     rank: int
     label: str
     short: str = ""
+    activity: str | None = None  # 同类活动合并进这个锚定状态显示
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class ActivityDef:
     label: str
     short: str = ""
     serious: bool = False
+    keep_min: float = 0  # 离开后继续显示多久（余温）
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,10 @@ class Rules:
     def tier(self, category: str) -> int:
         a = self.activities.get(category)
         return a.tier if a else 9
+
+    def keep_sec(self, category: str) -> float:
+        a = self.activities.get(category)
+        return a.keep_min * 60 if a else 0
 
     def short(self, category: str) -> str:
         d = self.anchors.get(category) or self.activities.get(category)

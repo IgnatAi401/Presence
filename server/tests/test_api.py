@@ -54,6 +54,15 @@ def test_signal_then_now(env):
     assert "project" not in now["main"]
 
 
+def test_office_main_carries_research_today(env):
+    client, clock, _ = env
+    post(client, [{"kind": "manual", "ts": T0, "data": {"state": "office"}},
+                  {"kind": "desktop", "ts": T0, "data": {"bundle_id": "com.mathworks.matlab"}}])
+    clock.t += 120
+    main = client.get("/presence/api/now").json()["main"]
+    assert (main["category"], main["activity"], main["today_sec"]) == ("office", "research", 120)
+
+
 def test_single_signal_body_and_future_ts_clamped(env):
     client, clock, _ = env
     r = client.post("/presence/api/signal", headers={"Authorization": f"Bearer {TOKEN}"},

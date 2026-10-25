@@ -30,7 +30,7 @@ from .sources.calendar import CalendarUnavailable, fetch_courses
 log = logging.getLogger("presence")
 
 PREFIX = "/presence/api"
-TICK_SEC = 15
+TICK_SEC = 2  # 状态推进间隔：决定切换防抖、余温到期多快反映到页面
 SSE_PING_SEC = 25
 SIGNAL_KEEP_DAYS = 30
 
@@ -143,11 +143,12 @@ class Presence:
     def payload(self, snap: Snapshot) -> dict[str, Any]:
         out = snap.public()
         items = [out["main"], *out["side"]]
-        if any(i.get("tier") == 1 for i in items):
+        if any(i.get("tier") == 1 or i.get("activity") for i in items):
             totals = self.today(snap.updated_at)["totals"]["activity"]
             for i in items:
-                if i.get("tier") == 1 and i["category"] in totals:
-                    i["today_sec"] = totals[i["category"]]
+                cat = i.get("activity") or (i["category"] if i.get("tier") == 1 else None)
+                if cat in totals:
+                    i["today_sec"] = totals[cat]
         for i in items:
             card = i.get("card")
             if card and "cover_hash" in card:

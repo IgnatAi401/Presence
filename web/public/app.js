@@ -10,7 +10,7 @@ const KICKER = {
   idle: "此刻",
 };
 const NAMES = {
-  class: "上课", eat: "吃饭", sleep: "睡觉", research: "科研", dev: "开发", game: "游戏", out: "出门",
+  class: "上课", eat: "吃饭", sleep: "睡觉", office: "办公室", research: "科研", dev: "开发", game: "游戏", out: "出门",
   custom: "自定义", video: "看视频", browse: "上网", phone: "刷手机", music: "听歌",
 };
 
@@ -56,7 +56,12 @@ function metaText(item, t) {
     parts.push(`已持续 ${dur(t - item.since)}`);
   }
   if (item.detail) parts.push(item.detail);
-  if (item.today_sec != null) parts.push(`今日已 ${dur(item.today_sec + (t - state.updated_at))}`);
+  if (item.today_sec != null) {
+    // 合并了活动的锚定状态（在办公室搞科研）：已持续是在办公室的时长，今日时长是科研的
+    const what = item.activity ? `今日${NAMES[item.activity] || ""}` : "今日已";
+    const live = item.slacking ? 0 : t - state.updated_at; // 摸鱼时正事时长不走
+    parts.push(`${what} ${dur(item.today_sec + live)}`);
+  }
   return parts;
 }
 
