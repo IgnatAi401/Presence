@@ -21,6 +21,14 @@ const CARD_ROW = { music: "在听音乐", game: "在玩游戏" };
 const VIDEO_SITES = { bilibili: "B站", youtube: "YouTube" };
 // 音乐卡片封面角上的播放器图标，键是信号里的 player
 const PLAYERS = { apple_music: "Apple Music", aimp: "AIMP" };
+// 固定映射到同站静态图标，不从状态文案猜 App，也不让浏览器请求第三方图标服务。
+const PHONE_ICONS = {
+  X: "x", Instagram: "instagram", 小黑盒: "xiaoheihe", 小红书: "xiaohongshu",
+  抖音: "douyin", TikTok: "tiktok", Reddit: "reddit", "Apple Music": "apple-music",
+  Discord: "discord", Safari: "safari", B站: "bilibili", YouTube: "youtube",
+  Telegram: "telegram", WhatsApp: "whatsapp", Facebook: "facebook",
+  ChatGPT: "chatgpt", DeepSeek: "deepseek", Claude: "claude", 淘宝: "taobao", 京东: "jd", 闲鱼: "xianyu",
+};
 
 const $ = (id) => document.getElementById(id);
 const hue = (category) => `var(--c-${category}, var(--amber))`;
@@ -42,6 +50,22 @@ function h(tag, attrs = {}, ...children) {
   }
   for (const c of children.flat()) if (c != null) el.append(c);
   return el;
+}
+
+const phoneIcons = new Map();
+function phoneIcon(item, slot) {
+  const slug = item.category === "phone" && PHONE_ICONS[item.app];
+  if (!slug) return null;
+  const key = `${slot}:${slug}`;
+  let icon = phoneIcons.get(key);
+  if (!icon) {
+    icon = h("img", { class: "app-icon", src: `/icons/apps/${slug}.png`, alt: "", title: item.app,
+      "aria-hidden": "true", width: 128, height: 128, decoding: "async" });
+    icon.addEventListener("error", () => { icon.hidden = true; }, { once: true });
+    phoneIcons.set(key, icon);
+    if (phoneIcons.size > 50) phoneIcons.delete(phoneIcons.keys().next().value);
+  }
+  return icon;
 }
 
 function dur(sec) {
@@ -167,9 +191,10 @@ function renderMain(t) {
   screen.style.setProperty("--hue", m.type === "idle" ? "var(--dim)" : hue(m.category));
   $("kicker").textContent = m.type === "idle" ? (m.category === "offline" ? "OFFLINE" : "AWAY") : KICKER[m.type];
   const label = $("main-label");
-  label.textContent = m.label;
+  label.replaceChildren(...[phoneIcon(m, "main"), m.label].filter((child) => child != null));
   label.title = m.label; // 超过两行时被截断，悬停看全文
-  label.classList.toggle("long", [...m.label].length > 14);
+  const labelLength = [...m.label].length;
+  label.classList.toggle("long", labelLength > 14 || (m.category === "phone" && labelLength >= 10));
   const meta = $("main-meta");
   meta.replaceChildren();
   const parts = metaText(m, t);
@@ -183,7 +208,7 @@ function renderMain(t) {
 
 function renderSide(t) {
   const list = $("side");
-  list.replaceChildren(...state.side.map((item) => {
+  list.replaceChildren(...state.side.map((item, index) => {
     const card = renderCard(item, t);
     const sub = [];
     if (item.slacking) sub.push(`🐟 摸鱼中 ${dur(t - item.slacking.since)}`);
@@ -194,7 +219,7 @@ function renderSide(t) {
     const text = card ? CARD_ROW[item.category] || item.label
       : item.detail ? `${item.detail} · ${item.label}` : item.label;
     return h("li", { class: card ? "has-card" : null, "--hue": hue(item.category) },
-      h("span", { class: "lbl", title: text }, text),
+      h("span", { class: "lbl", title: text }, phoneIcon(item, `side-${index}`), text),
       sub.length ? h("span", { class: "sub" }, sub.join(" · ")) : null,
       card,
     );

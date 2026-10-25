@@ -35,3 +35,4 @@ agents/mac/build/
 
 # 快捷指令签名产物（不含真实令牌；可用 shortcuts/build.py 重新生成）
 shortcuts/build/
+shortcuts/automations/build/

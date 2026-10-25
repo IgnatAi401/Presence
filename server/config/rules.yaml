@@ -20,8 +20,32 @@ activities:
   custom: { tier: 2, short: "自定义", label: "{text}" }
   video: { tier: 3, short: "看视频", label: "看视频", keep_min: 1 }
   browse: { tier: 3, short: "上网", label: "网上冲浪", keep_min: 1 }
-  phone: { tier: 4, short: "刷手机", label: "在刷 {app}", keep_min: 1 }
+  phone: { tier: 4, short: "刷手机", label: "在刷 {app}" }
   music: { tier: 4, short: "听歌", label: "听《{title}》", keep_min: 1 }
+
+# 手机 App 的公开文案；App 名与快捷指令上报一致，未知 App 沿用“在刷 {app}”。
+phone_apps:
+  X: "在 X 上刷动态"
+  Instagram: "在 IG 看看大家的日常"
+  小黑盒: "在刷小黑盒"
+  小红书: "在小红书翻翻生活灵感"
+  抖音: "在抖音刷短视频"
+  TikTok: "在 TikTok 刷短视频"
+  Reddit: "在 Reddit 逛社区"
+  Apple Music: "在 Apple Music 上听音乐"
+  Discord: "在 Discord 里聊天"
+  Telegram: "在 Telegram 看消息、聊聊天"
+  WhatsApp: "在 WhatsApp 和朋友聊聊天"
+  Facebook: "在 Facebook 看看新动态"
+  Safari: "在用 Safari 逛网页"
+  B站: "在刷 B站"
+  YouTube: "在 YouTube 看视频"
+  ChatGPT: "在和 ChatGPT 聊天"
+  DeepSeek: "在和 DeepSeek 聊天"
+  Claude: "在和 Claude 聊天"
+  淘宝: "在淘宝淘点好东西"
+  京东: "在京东逛逛"
+  闲鱼: "在闲鱼淘二手"
 
 # 1. 项目匹配：从白名单 App 的窗口标题里提取出的项目名
 projects:

@@ -1,0 +1,191 @@
+{
+  "X": {
+    "file": "x.png",
+    "id": 333903271,
+    "name": "X（前身为Twitter）",
+    "bundle": "com.atebits.Tweetie2",
+    "seller": "X Corp.",
+    "source": "https://apps.apple.com/cn/app/x-%E5%89%8D%E8%BA%AB%E4%B8%BAtwitter/id333903271?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/8a/c8/0d/8ac80d53-9d93-b659-94b3-6b7a87379b90/ProductionAppIcon-0-0-1x_U007emarketing-0-8-0-0-0-85-220.png/512x512bb.jpg"
+  },
+  "Instagram": {
+    "file": "instagram.png",
+    "id": 389801252,
+    "name": "Instagram",
+    "bundle": "com.burbn.instagram",
+    "seller": "Instagram, Inc.",
+    "source": "https://apps.apple.com/cn/app/instagram/id389801252?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/01/2d/b1/012db1a7-249a-86e8-f025-72491c2a6475/Prod-0-0-1x_U007epad-0-0-0-1-0-0-sRGB-85-220.png/512x512bb.jpg"
+  },
+  "小黑盒": {
+    "file": "xiaoheihe.png",
+    "id": 1244505010,
+    "name": "小黑盒 - 八千万游戏玩家社区",
+    "bundle": "com.max.xiaoheihe",
+    "seller": "Qingfeng(Beijing)Technology Co., Ltd.",
+    "source": "https://apps.apple.com/cn/app/%E5%B0%8F%E9%BB%91%E7%9B%92-%E5%85%AB%E5%8D%83%E4%B8%87%E6%B8%B8%E6%88%8F%E7%8E%A9%E5%AE%B6%E7%A4%BE%E5%8C%BA/id1244505010?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/f8/90/d1/f890d11a-d076-04c8-3871-1f252460153f/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+  },
+  "抖音": {
+    "file": "douyin.png",
+    "id": 1142110895,
+    "name": "抖音",
+    "bundle": "com.ss.iphone.ugc.Aweme",
+    "seller": "Beijing Douyin Technology Co., Ltd.",
+    "source": "https://apps.apple.com/cn/app/%E6%8A%96%E9%9F%B3/id1142110895?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/56/0d/e6/560de620-6e7e-4679-43e4-689a52d71e4c/AppIcon-0-0-1x_U007emarketing-0-0-0-7-0-0-85-220.png/512x512bb.jpg"
+  },
+  "TikTok": {
+    "file": "tiktok.png",
+    "id": 835599320,
+    "name": "TikTok - Videos, Shop & LIVE",
+    "bundle": "com.zhiliaoapp.musically",
+    "seller": "TIKTOK PTE. LTD.",
+    "source": "https://apps.apple.com/us/app/tiktok-videos-shop-live/id835599320?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/99/33/74/99337468-d03a-5efc-d436-67c0f4d918e1/TikTok_AppIcon26-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+  },
+  "Reddit": {
+    "file": "reddit.png",
+    "id": 1064216828,
+    "name": "Reddit",
+    "bundle": "com.reddit.Reddit",
+    "seller": "REDDIT, INC.",
+    "source": "https://apps.apple.com/us/app/reddit/id1064216828?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/0e/07/9e/0e079ea4-79d8-e741-80ec-8f2cf141f36b/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+  },
+  "Apple Music": {
+    "file": "apple-music.png",
+    "id": 1108187390,
+    "name": "Apple Music",
+    "bundle": "com.apple.Music",
+    "seller": "Apple Distribution International",
+    "source": "https://apps.apple.com/cn/app/apple-music/id1108187390?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/c2/74/89/c27489c2-2c63-2e32-efee-b0f59b3184ef/musicCalistoga-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+  },
+  "Discord": {
+    "file": "discord.png",
+    "id": 985746746,
+    "name": "Discord - Talk, Play, Hang Out",
+    "bundle": "com.hammerandchisel.discord",
+    "seller": "Discord Inc.",
+    "source": "https://apps.apple.com/us/app/discord-talk-play-hang-out/id985746746?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/f9/3f/31/f93f310e-890e-e076-7184-a4fa123e4f90/AppIcon-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg"
+  },
+  "Safari": {
+    "file": "safari.png",
+    "id": 1146562112,
+    "name": "Safari",
+    "bundle": "com.apple.mobilesafari",
+    "seller": "Apple Distribution International",
+    "source": "https://apps.apple.com/cn/app/safari/id1146562112?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/9b/4a/12/9b4a12c2-7ea9-9e38-4d4f-f1342b310519/safariCalistoga-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+  },
+  "B站": {
+    "file": "bilibili.png",
+    "id": 736536022,
+    "name": "哔哩哔哩-弹幕番剧直播高清视频",
+    "bundle": "tv.danmaku.bilianime",
+    "seller": "Shanghai Bilibili Animation Co.,Ltd",
+    "source": "https://apps.apple.com/cn/app/%E5%93%94%E5%93%A9%E5%93%94%E5%93%A9-%E5%BC%B9%E5%B9%95%E7%95%AA%E5%89%A7%E7%9B%B4%E6%92%AD%E9%AB%98%E6%B8%85%E8%A7%86%E9%A2%91/id736536022?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/d3/25/b7/d325b78e-392f-402d-5927-94327f0c4499/AppIcon-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg"
+  },
+  "YouTube": {
+    "file": "youtube.png",
+    "id": 544007664,
+    "name": "YouTube",
+    "bundle": "com.google.ios.youtube",
+    "seller": "Google LLC",
+    "source": "https://apps.apple.com/cn/app/youtube/id544007664?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/11/1f/1e/111f1e29-ab13-355b-4ed2-b1b97abc2200/logo_youtube_2024_q4_color-0-0-1x_U007emarketing-0-0-0-7-0-0-0-85-220.png/512x512bb.jpg"
+  },
+  "ChatGPT": {
+    "file": "chatgpt.png",
+    "id": 6448311069,
+    "name": "ChatGPT",
+    "bundle": "com.openai.chat",
+    "seller": "OpenAI OpCo, LLC",
+    "source": "https://apps.apple.com/us/app/chatgpt/id6448311069?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/42/3b/1d/423b1d61-1b55-0bca-d3b9-1ce597c7b4b0/AppIcon-0-0-1x_U007epad-0-0-0-1-0-85-220.png/512x512bb.jpg"
+  },
+  "DeepSeek": {
+    "file": "deepseek.png",
+    "id": 6737597349,
+    "name": "DeepSeek - AI 智能助手",
+    "bundle": "com.deepseek.chat",
+    "seller": "Hangzhou DeepSeek Artificial Intelligence Co., Ltd",
+    "source": "https://apps.apple.com/cn/app/deepseek-ai-%E6%99%BA%E8%83%BD%E5%8A%A9%E6%89%8B/id6737597349?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/20/25/fd/2025fdfa-c8aa-e444-445f-165a0da6459c/AppIcon-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg"
+  },
+  "Claude": {
+    "file": "claude.png",
+    "id": 6473753684,
+    "name": "Claude by Anthropic",
+    "bundle": "com.anthropic.claude",
+    "seller": "Anthropic PBC",
+    "source": "https://apps.apple.com/us/app/claude-by-anthropic/id6473753684?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/eb/00/7c/eb007c0a-a26e-eb3e-9f89-cb1c37049237/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
+  },
+  "淘宝": {
+    "file": "taobao.png",
+    "id": 387682726,
+    "name": "淘宝-万能的淘宝！",
+    "bundle": "com.taobao.taobao4iphone",
+    "seller": "Zhejiang Taobao Network Co.,Ltd",
+    "source": "https://apps.apple.com/cn/app/%E6%B7%98%E5%AE%9D-%E4%B8%87%E8%83%BD%E7%9A%84%E6%B7%98%E5%AE%9D/id387682726?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/d4/b1/4a/d4b14a2f-73e2-a36d-49e7-ff8492fa7e06/AppIcon-0-0-1x_U007emarketing-0-10-0-85-220.png/512x512bb.jpg"
+  },
+  "京东": {
+    "file": "jd.png",
+    "id": 414245413,
+    "name": "京东-又好又便宜",
+    "bundle": "com.360buy.jdmobile",
+    "seller": "Beijing Jingdong Century Trading Co., Ltd.",
+    "source": "https://apps.apple.com/cn/app/%E4%BA%AC%E4%B8%9C-%E5%8F%88%E5%A5%BD%E5%8F%88%E4%BE%BF%E5%AE%9C/id414245413?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/0b/0e/ad/0b0eaddf-8cc3-7843-954c-f96691d8d814/AppIcon-0-0-1x_U007epad-0-1-0-0-85-220.png/512x512bb.jpg"
+  },
+  "闲鱼": {
+    "file": "xianyu.png",
+    "id": 510909506,
+    "name": "闲鱼 - 上闲鱼，赚一笔 !",
+    "bundle": "com.taobao.fleamarket",
+    "seller": "Zhejiang Alibaba Xianyu Network Technology Co., Ltd.",
+    "source": "https://apps.apple.com/cn/app/%E9%97%B2%E9%B1%BC-%E4%B8%8A%E9%97%B2%E9%B1%BC-%E8%B5%9A%E4%B8%80%E7%AC%94/id510909506?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/c1/e1/9f/c1e19fc8-8acb-9f5d-64fd-222a57b4c8a6/AppIcon-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg"
+  },
+  "小红书": {
+    "file": "xiaohongshu.png",
+    "id": 741292507,
+    "name": "小红书 - 你的生活兴趣社区",
+    "bundle": "com.xingin.discover",
+    "seller": "Xingin Information Technology (Shanghai) Co., Ltd",
+    "source": "https://apps.apple.com/cn/app/%E5%B0%8F%E7%BA%A2%E4%B9%A6-%E4%BD%A0%E7%9A%84%E7%94%9F%E6%B4%BB%E5%85%B4%E8%B6%A3%E7%A4%BE%E5%8C%BA/id741292507?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/4f/54/88/4f54884e-c820-aa94-5797-c6b69c27ed3a/AppIcon-0-0-1x_U007epad-0-11-0-85-220.png/512x512bb.jpg"
+  },
+  "Telegram": {
+    "file": "telegram.png",
+    "id": 686449807,
+    "name": "Telegram Messenger",
+    "bundle": "ph.telegra.Telegraph",
+    "seller": "Telegram FZ-LLC",
+    "source": "https://apps.apple.com/us/app/telegram-messenger/id686449807?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/49/45/33/49453346-cd15-c622-d6eb-5f4f99ca82fa/Telegram-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg"
+  },
+  "WhatsApp": {
+    "file": "whatsapp.png",
+    "id": 310633997,
+    "name": "WhatsApp Messenger",
+    "bundle": "net.whatsapp.WhatsApp",
+    "seller": "WhatsApp Inc.",
+    "source": "https://apps.apple.com/us/app/whatsapp-messenger/id310633997?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/78/a1/10/78a11046-7937-eaf8-24b6-96ee9a30d479/AppIcon-0-0-1x_U007epad-0-0-0-1-0-0-sRGB-0-85-220.png/512x512bb.jpg"
+  },
+  "Facebook": {
+    "file": "facebook.png",
+    "id": 284882215,
+    "name": "Facebook",
+    "bundle": "com.facebook.Facebook",
+    "seller": "Meta Platforms, Inc.",
+    "source": "https://apps.apple.com/us/app/facebook/id284882215?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/5d/a6/7a/5da67a2d-6bdd-b95b-86d7-a201d6979b35/Icon-Production-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg"
+  }
+}

@@ -75,10 +75,11 @@ class Item:
     activity: str | None = None  # 主状态合并了哪个活动（显示它的今日时长）
     project: str | None = None  # 仅私有
     domain: str | None = None  # 仅私有
+    app: str | None = None  # 手机前台 App 名；供公开页匹配本地图标
 
     def public(self) -> dict[str, Any]:
         out: dict[str, Any] = {"type": self.type, "category": self.category, "label": self.label}
-        for k in ("tier", "since", "until", "detail", "card", "activity"):
+        for k in ("tier", "since", "until", "detail", "card", "activity", "app"):
             v = getattr(self, k)
             if v is not None:
                 out[k] = v
@@ -560,7 +561,7 @@ class Engine:
                 stopped = not active and cur.identity == identity
                 cur.data = {**cur.data, **data}
                 cur.last_ts = cur.data_ts = ts  # 卡片的 updated_at 对应暂停那一刻的进度
-                self._end_feed(key, ts, linger=stopped)
+                self._end_feed(key, ts, linger=stopped and category != "phone")
             cur = None
         if not active:
             return
@@ -699,6 +700,8 @@ class Engine:
         label = _fmt(d.label, **(values or {})) if d else category
         if category == "video" and values and values.get("name"):
             label = f"看 {values['name']}"  # 主状态前面有“正在”，这里不再写“在”
+        if category == "phone" and values:
+            label = self.rules.phone_apps.get(values.get("app"), label)
         if d and d.show_project and kw.get("project") and not kw.get("detail"):
             kw["detail"] = kw["project"]  # 搞科研 / 搞开发时公开工作区文件夹名
         return Item(type=ACTIVITY, category=category, label=label or category, since=since,
@@ -785,4 +788,4 @@ class Engine:
         if f.category == "game":
             card = {"name": d.get("name"), "appid": d.get("appid"), "since": f.since}
             return self.activity_item("game", f.since, values={"name": d.get("name") or d.get("exe")}, card=card)
-        return self.activity_item(f.category, f.since, values={"app": d.get("app")})
+        return self.activity_item(f.category, f.since, values={"app": d.get("app")}, app=d.get("app"))

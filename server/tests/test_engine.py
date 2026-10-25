@@ -463,10 +463,23 @@ def test_phone_app_switch_and_close():
     e.ingest("iphone", "phone_app", T0, 1800, {"app": "X", "event": "open"})
     e.ingest("iphone", "phone_app", T0 + 60, 1800, {"app": "Instagram", "event": "open"})
     s = sim.snap(70)
-    assert s.main.label == "在刷 Instagram" and s.side == []
+    assert s.main.label == "在 IG 看看大家的日常" and s.side == []
     e.ingest("iphone", "phone_app", T0 + 100, 1800, {"app": "Instagram", "event": "close"})
-    assert sim.snap(110).main.label == "在刷 Instagram"
+    assert sim.snap(110).main.category == "away"
     assert sim.snap(161).main.category == "away"
+
+
+def test_late_phone_close_does_not_clear_new_app_or_anchor():
+    sim = Sim().manual(0, "office")
+    e = sim.e
+    e.ingest("iphone", "phone_app", T0 + 1, 1800, {"app": "X", "event": "open"})
+    e.ingest("iphone", "phone_app", T0 + 2, 1800, {"app": "Claude", "event": "open"})
+    e.ingest("iphone", "phone_app", T0 + 3, 1800, {"app": "X", "event": "close"})
+    snapshot = sim.snap(4)
+    assert snapshot.main.category == "office"
+    assert [it.label for it in snapshot.side] == ["在和 Claude 聊天"]
+    e.ingest("iphone", "phone_app", T0 + 5, 1800, {"app": "Claude", "event": "close"})
+    assert cats(sim.snap(6)) == ("office", [])
 
 
 @pytest.mark.parametrize("tier_order", [("research", "game", "video", "music")])

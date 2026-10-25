@@ -1,0 +1,23 @@
+[
+  {"name": "X", "app": "X"},
+  {"name": "IG", "app": "Instagram"},
+  {"name": "小黑盒", "app": "小黑盒"},
+  {"name": "小红书", "app": "小红书"},
+  {"name": "抖音", "app": "抖音"},
+  {"name": "TikTok", "app": "TikTok"},
+  {"name": "红迪", "app": "Reddit"},
+  {"name": "Apple Music", "app": "Apple Music"},
+  {"name": "Discord", "app": "Discord"},
+  {"name": "Telegram", "app": "Telegram"},
+  {"name": "WhatsApp", "app": "WhatsApp"},
+  {"name": "Facebook", "app": "Facebook"},
+  {"name": "Safari", "app": "Safari"},
+  {"name": "B站", "app": "B站"},
+  {"name": "YouTube", "app": "YouTube"},
+  {"name": "ChatGPT", "app": "ChatGPT"},
+  {"name": "DeepSeek", "app": "DeepSeek"},
+  {"name": "Claude", "app": "Claude"},
+  {"name": "淘宝", "app": "淘宝"},
+  {"name": "京东", "app": "京东"},
+  {"name": "闲鱼", "app": "闲鱼"}
+]

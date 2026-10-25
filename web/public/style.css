@@ -144,6 +144,17 @@ a { color: inherit; }
   overflow: hidden;
 }
 .main.long { font-size: clamp(24px, 5.2vw, 34px); }
+.app-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-inline-end: 0.28em;
+  vertical-align: -0.12em;
+  border-radius: 23%;
+  object-fit: cover;
+}
+.app-icon[hidden] { display: none; }
+.side .app-icon { width: 20px; height: 20px; vertical-align: -4px; margin-inline-end: 8px; }
 .meta { margin: 0; color: var(--dim); }
 .meta .slack { color: var(--amber); white-space: nowrap; }
 .notice { margin: 14px 0 0; color: var(--amber); }

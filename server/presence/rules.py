@@ -45,6 +45,7 @@ class Rules:
     domains: dict[str, str] = field(default_factory=dict)
     apps: dict[str, str] = field(default_factory=dict)
     names: dict[str, str] = field(default_factory=dict)
+    phone_apps: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def load(cls, path: Path) -> Rules:
@@ -56,6 +57,7 @@ class Rules:
             domains={k.lower(): v for k, v in (raw.get("domains") or {}).items()},
             apps=raw.get("apps") or {},
             names=raw.get("names") or {},
+            phone_apps=raw.get("phone_apps") or {},
         )
 
     def is_serious(self, category: str | None) -> bool:

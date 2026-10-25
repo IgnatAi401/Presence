@@ -1,0 +1,9 @@
+{
+  "format": "OS 27 WFWorkflowTriggers",
+  "evidence": "Closed variant exported from the local macOS Shortcuts editor with no App selected; opened uses the native default. No live database reads or writes.",
+  "reference": "https://developer.apple.com/videos/play/wwdc2026/310/",
+  "identifier": "WFAppInFocusTrigger",
+  "openedParameters": {},
+  "closedParameters": {"WFAppState": "closed"},
+  "appPicker": "WFSelectedApps omitted intentionally; select on iPhone after import"
+}
