@@ -4,6 +4,8 @@ ROADMAP.md
 # macOS
 .DS_Store
 Icon?
+# macOS 不区分大小写，Icon? 会误伤 icons 文件夹
+!web/public/icons/
 
 # Python / uv
 .venv/

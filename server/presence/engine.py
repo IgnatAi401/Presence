@@ -700,11 +700,7 @@ class Engine:
                     it.tier = m.tier
                 acts.append(it)
 
-        music = [f for f in feeds if f.category == "music"]
-        latest_music = max(music, key=lambda f: f.last_ts, default=None)
-        for f in feeds:
-            if f.category == "music" and f is not latest_music:
-                continue  # 多台设备同时放歌时只显示最近更新的一个
+        for f in feeds:  # 多台设备同时放歌时各显示一张卡片（Apple Music 和 AIMP 并存）
             it = self._feed_item(f)
             if f.category == "video" and f.source == self.mac.source and site_since and it.card:
                 # 连续看视频从打开网站算起，换成卡片显示后不从零开始
@@ -740,7 +736,7 @@ class Engine:
     def _feed_item(self, f: Feed) -> Item:
         d = f.data
         if f.category == "music":
-            card = {k: d.get(k) for k in ("title", "artist", "album", "state", "position", "duration")}
+            card = {k: d.get(k) for k in ("player", "title", "artist", "album", "state", "position", "duration")}
             card["cover_hash"] = d.get("cover_hash")
             card["updated_at"] = f.data_ts
             card["session_since"] = f.session  # 连续听歌的起点

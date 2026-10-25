@@ -196,6 +196,18 @@ a { color: inherit; }
   background: var(--faint) center / cover no-repeat;
 }
 .card.wide .cover { aspect-ratio: 16 / 9; }
+/* 音乐来源：封面右下角的播放器图标 */
+.card .cover { position: relative; }
+.card .cover .player {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px var(--bg, #111);
+}
+.card .cover .player.aimp { border-radius: 50%; } /* AIMP 标志是圆的 */
 /* 网页：不画框，一行“小图标 标题 · 域名” */
 .card.web {
   display: flex;
@@ -234,9 +246,9 @@ a.card.web:hover .t { text-decoration: underline; text-underline-offset: 3px; }
   font: 12px var(--mono);
   font-variant-numeric: tabular-nums;
 }
-/* 右上角：连续听歌时长 */
+/* 右上角：播放器 · 连续听了多久 */
 .card.has-badge { position: relative; }
-.card.has-badge .t { padding-right: 112px; }
+.card.has-badge .t { padding-right: var(--badge-w, 112px); }
 .card .badge {
   position: absolute;
   top: 12px;

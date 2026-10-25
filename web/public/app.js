@@ -19,6 +19,8 @@ const NAMES = {
 
 const CARD_ROW = { music: "在听音乐", game: "在玩游戏" };
 const VIDEO_SITES = { bilibili: "B站", youtube: "YouTube" };
+// 音乐卡片封面角上的播放器图标，键是信号里的 player
+const PLAYERS = { apple_music: "Apple Music", aimp: "AIMP" };
 
 const $ = (id) => document.getElementById(id);
 const hue = (category) => `var(--c-${category}, var(--amber))`;
@@ -93,10 +95,15 @@ const mmss = (sec) => {
     : `${Math.floor(sec / 60)}:${s}`;
 };
 
+// 右上角标签大约多宽（12px 等宽字体：英文数字约 0.6em，中文 1em），给标题留出位置
+const badgeWidth = (text) => Math.ceil([...text].reduce((w, ch) => w + (ch.charCodeAt(0) > 255 ? 12 : 7.2), 0)) + 16;
+
 function renderCard(item, t) {
   const c = item.card;
   if (!c) return null;
-  const cover = h("div", { class: "cover", style: c.cover ? { backgroundImage: `url("${encodeURI(mediaUrl(c.cover))}")` } : {} });
+  const player = item.category === "music" ? PLAYERS[c.player] : null;
+  const cover = h("div", { class: "cover", style: c.cover ? { backgroundImage: `url("${encodeURI(mediaUrl(c.cover))}")` } : {} },
+    player ? h("img", { class: `player ${c.player}`, src: `/icons/${c.player.replace("_", "-")}.svg`, alt: player, title: player }) : null);
   let title = item.label;
   let sub = "";
   let href = null;
@@ -111,7 +118,7 @@ function renderCard(item, t) {
   } else if (item.category === "music") {
     title = c.title || "未知曲目";
     sub = [c.artist, c.album].filter(Boolean).join(" · ") + (c.state === "paused" ? " · 已暂停" : "");
-    if (c.session_since) badge = `连续听歌 ${dur(sessionSec(c, t))}`;
+    if (c.session_since) badge = [player, dur(sessionSec(c, t))].filter(Boolean).join(" · ");
   } else if (item.category === "video") {
     // 服务器还没查到标题时只有进度条
     title = c.title || item.label;
@@ -134,7 +141,7 @@ function renderCard(item, t) {
   const attrs = { class: `card${kind}`, "--hue": hue(item.category) };
   return href
     ? h("a", { ...attrs, href, target: "_blank", rel: "noopener" }, cover, body)
-    : h("div", { ...attrs, class: `${attrs.class}${badge ? " has-badge" : ""}` }, cover, body,
+    : h("div", { ...attrs, class: `${attrs.class}${badge ? " has-badge" : ""}`, "--badge-w": badge ? `${badgeWidth(badge)}px` : null }, cover, body,
       badge ? h("span", { class: "badge" }, badge) : null);
 }
 

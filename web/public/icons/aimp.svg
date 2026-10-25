@@ -1,0 +1,13 @@
+<!-- AIMP 官方标志，取自 https://www.aimp.ru/v2/theme/images/header-logo.svg 的 Logo 部分 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="gradient">
+      <stop offset="0%" stop-color="#F7CA00"/>
+      <stop offset="80%" stop-color="#F7C000"/>
+      <stop offset="100%" stop-color="#F7A200"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="128" r="128" fill="#000000"/>
+  <circle cx="128" cy="128" r="100" fill="url(#gradient)"/>
+  <path d="M60,170 L155,170 L142,150 L98,150 L127,102 L170,170 L196,170 L127,55z" fill="#000000"/>
+</svg>

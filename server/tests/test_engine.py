@@ -402,6 +402,18 @@ def test_music_resume_within_linger_keeps_since():
     assert sim.segments("music")[1].meta == {"resumed": True}
 
 
+def test_music_from_two_players_coexist():
+    e = (sim := Sim()).e
+    e.ingest("mac", "music", T0, 300, {"player": "apple_music", "title": "A", "state": "playing"})
+    e.ingest("windows", "music", T0 + 10, 300, {"player": "aimp", "title": "B", "state": "playing"})
+    s = sim.snap(20)
+    cards = [s.main.card, *(i.card for i in s.side)]
+    assert sorted(c["player"] for c in cards) == ["aimp", "apple_music"]
+    e.ingest("windows", "music", T0 + 30, 300, {"player": "aimp", "title": "B", "state": "paused"})
+    s = sim.snap(40)
+    assert len(s.side) == 1 and {s.main.card["player"], s.side[0].card["player"]} == {"aimp", "apple_music"}
+
+
 def test_game_lingers_three_minutes():
     e = (sim := Sim()).e
     e.ingest("windows", "game", T0, 3600, {"name": "Hades", "event": "start"})
