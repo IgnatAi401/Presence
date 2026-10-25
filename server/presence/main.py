@@ -29,7 +29,7 @@ from .config import CONFIG_DIR, Settings
 from .db import DB
 from .engine import Engine, Snapshot, public_host
 from .rules import Rules
-from .sources import video, web
+from .sources import steam, video, web
 from .sources.calendar import CalendarUnavailable, fetch_courses
 
 log = logging.getLogger("presence")
@@ -49,6 +49,7 @@ MEDIA_HEADERS = {
 VIDEO_META_RETRY_SEC = 3600  # 视频信息没查到时，过这么久再查
 SITE_ICON_RETRY_SEC = 86400  # 网站图标没取到时，过这么久再取
 DOMAIN = re.compile(r"[a-z0-9.-]{1,253}")
+STEAM_RETRY_SEC = 300  # 游戏封面没取到时，过这么久再取
 
 
 def sniff_image(data: bytes) -> str | None:
@@ -119,6 +120,11 @@ class Presence:
         self.site_icons: dict[str, Any] = {}
         self.icon_fetching: set[str] = set()
         self.fetch_icon: Callable[[str, int], web.Icon | None] = web.fetch_icon
+        # Steam：上次查到的游戏；游戏封面 appid → sha256（None 表示没取到，记下时间稍后重试）
+        self.fetch_steam: Callable[[str, str], steam.Playing | None] = steam.fetch_playing
+        self.steam_playing: steam.Playing | None = None
+        self.game_covers: dict[str, tuple[str | None, float]] = {}
+        self.cover_fetching: set[str] = set()
         self.tasks: set[asyncio.Task] = set()
 
         last = self.db.last_signal_ts()
@@ -248,6 +254,61 @@ class Presence:
         finally:
             self.icon_fetching.discard(domain)
 
+    # -- Steam
+
+    async def poll_steam(self) -> float:
+        """查一次 Steam，把开始 / 退出变成 game 信号；返回下次查询前等待的秒数。"""
+        cfg = self.settings.steam
+        try:
+            cur = await asyncio.to_thread(self.fetch_steam, cfg.api_key, cfg.steam_id)
+        except steam.SteamError as exc:
+            log.warning("查询 Steam 失败：%s", exc)
+            return cfg.playing_poll_sec if self.steam_playing else cfg.poll_sec
+        prev, signals = self.steam_playing, []
+        if prev and (cur is None or cur.name != prev.name):
+            signals.append(SignalIn(kind="game", ttl=1, data={"name": prev.name, "appid": prev.appid, "event": "stop"}))
+            log.info("Steam：退出《%s》", prev.name)
+        if cur:
+            # 每次都发 start 续期；连续几次查询失败（约 5 倍间隔）后自动当作结束
+            ttl = cfg.playing_poll_sec * 5
+            signals.append(SignalIn(kind="game", ttl=ttl, data={"name": cur.name, "appid": cur.appid, "event": "start"}))
+            if prev is None or cur.name != prev.name:
+                log.info("Steam：开始玩《%s》（appid %s）", cur.name, cur.appid)
+            if cur.appid:
+                self.want_game_cover(cur.appid)
+        self.steam_playing = cur
+        if signals:
+            self.handle("steam", signals)
+        return cfg.playing_poll_sec if cur else cfg.poll_sec
+
+    def want_game_cover(self, appid: str) -> None:
+        if appid in self.cover_fetching:
+            return
+        if appid not in self.game_covers:
+            self.game_covers[appid] = (self.db.media_by_origin(steam.cover_url(appid)), 0)
+        h, tried = self.game_covers[appid]
+        if h or self.clock() - tried < STEAM_RETRY_SEC:
+            return
+        self.cover_fetching.add(appid)
+        self.spawn(self.load_game_cover(appid))
+
+    async def load_game_cover(self, appid: str) -> None:
+        url = steam.cover_url(appid)
+        try:
+            data = await asyncio.to_thread(self.fetch_cover, url, self.settings.media_max_bytes)
+            self.game_covers[appid] = (self.save_fetched_image(data, "steam", url), self.clock())
+            self.update()
+        except Exception:
+            log.exception("保存游戏封面出错 %s", appid)
+        finally:
+            self.cover_fetching.discard(appid)
+
+    def game_card(self, card: dict[str, Any]) -> None:
+        appid = card.get("appid")
+        h = self.game_covers.get(appid, (None, 0))[0] if isinstance(appid, str) else None
+        if h:
+            card["cover_hash"] = h
+
     def web_card(self, card: dict[str, Any]) -> None:
         domain = card.get("domain")
         row = self.cached_site_icon(domain) if isinstance(domain, str) else None
@@ -324,6 +385,8 @@ class Presence:
                 self.web_card(card)
             elif card and i["category"] == "video":
                 self.video_card(card)
+            elif card and i["category"] == "game":
+                self.game_card(card)
             if card and "cover_hash" in card:
                 h = card.pop("cover_hash")
                 if h:
@@ -379,6 +442,16 @@ async def _calendar_loop(p: Presence) -> None:
         await asyncio.sleep(p.settings.calendar.refresh_hours * 3600)
 
 
+async def _steam_loop(p: Presence) -> None:
+    while True:
+        try:
+            delay = await p.poll_steam()
+        except Exception:
+            log.exception("Steam 轮询出错")
+            delay = p.settings.steam.poll_sec
+        await asyncio.sleep(delay)
+
+
 def create_app(
     settings: Settings | None = None,
     rules: Rules | None = None,
@@ -395,6 +468,8 @@ def create_app(
         state["p"] = p
         app.state.presence = p
         tasks = [asyncio.create_task(_ticker(p)), asyncio.create_task(_calendar_loop(p))] if background else []
+        if background and settings.steam.enabled:
+            tasks.append(asyncio.create_task(_steam_loop(p)))
         try:
             yield
         finally:

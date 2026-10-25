@@ -205,6 +205,11 @@ class DB:
 
     # -- video_meta
 
+    def media_by_origin(self, url: str) -> str | None:
+        row = self.conn.execute("SELECT id FROM media_cache WHERE origin_url = ? ORDER BY created_at DESC LIMIT 1",
+                                (url,)).fetchone()
+        return row["id"] if row else None
+
     def get_video_meta(self, site: str, vid: str) -> sqlite3.Row | None:
         return self.conn.execute("SELECT * FROM video_meta WHERE site = ? AND id = ?", (site, vid)).fetchone()
 

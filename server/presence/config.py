@@ -23,6 +23,18 @@ class CalendarSettings:
 
 
 @dataclass
+class SteamSettings:
+    api_key: str = ""  # Steam Web API Key（32 位）：https://steamcommunity.com/dev/apikey
+    steam_id: str = ""  # SteamID64（17 位数字）
+    poll_sec: float = 60
+    playing_poll_sec: float = 30  # 在玩时查得勤一些，及时发现退出
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.api_key and self.steam_id)
+
+
+@dataclass
 class Settings:
     devices: dict[str, str]  # 设备名（即信号来源 source）→ 令牌
     timezone: str = "Asia/Shanghai"
@@ -35,6 +47,7 @@ class Settings:
     max_streams: int = 200
     timing: Timing = field(default_factory=Timing)
     calendar: CalendarSettings = field(default_factory=CalendarSettings)
+    steam: SteamSettings = field(default_factory=SteamSettings)
 
     @property
     def media_dir(self) -> Path:
@@ -57,6 +70,7 @@ class Settings:
             db_path = SERVER_DIR / db_path
         timing_keys = {f.name for f in fields(Timing)}
         cal_keys = {f.name for f in fields(CalendarSettings)}
+        steam_keys = {f.name for f in fields(SteamSettings)}
         devices = {k: v for k, v in raw.get("devices", {}).items() if v}
         return cls(
             devices=devices,
@@ -71,4 +85,6 @@ class Settings:
             max_streams=int(server.get("max_streams", 200)),
             timing=Timing(**{k: v for k, v in raw.get("engine", {}).items() if k in timing_keys}),
             calendar=CalendarSettings(**{k: v for k, v in raw.get("calendar", {}).items() if k in cal_keys}),
+            steam=SteamSettings(**{k: str(v) if k in ("api_key", "steam_id") else v
+                                   for k, v in raw.get("steam", {}).items() if k in steam_keys}),
         )

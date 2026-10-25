@@ -34,3 +34,11 @@ enabled = true
 name = "课程表"
 title_strip = '\s*[（(].*$'        # 去掉标题里括号及之后的内容（教室、教师等）
 refresh_hours = 6
+
+# Steam 正在玩的游戏：两项都填了才会轮询；Steam 隐私设置里“游戏详情”要设为公开
+# 填好后检查：uv run python -m presence.sources.steam
+[steam]
+api_key = ""                       # Steam Web API Key：大写字母 + 数字，32 位（https://steamcommunity.com/dev/apikey）
+steam_id = ""                      # SteamID64：纯数字，17 位，7656119 开头
+poll_sec = 60                      # 没在玩时多久查一次
+playing_poll_sec = 30              # 在玩时多久查一次
