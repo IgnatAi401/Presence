@@ -14,6 +14,7 @@ from presence.stats import day_bounds
 
 RULES = Rules.load(Path(__file__).resolve().parent.parent / "config" / "rules.yaml")
 TOKEN = "test-token-mac"
+WIN_TOKEN = "test-token-windows"
 T0 = 1_800_000_000.0  # 2027-01-15 16:00 北京时间
 
 
@@ -27,7 +28,7 @@ class Clock:
 
 @pytest.fixture
 def env(tmp_path):
-    settings = Settings(devices={"mac": TOKEN}, db_path=tmp_path / "p.db")
+    settings = Settings(devices={"mac": TOKEN, "windows": WIN_TOKEN}, db_path=tmp_path / "p.db")
     clock = Clock(T0)
     app = create_app(settings, RULES, clock=clock, background=False)
     with TestClient(app) as client:
@@ -298,3 +299,72 @@ def test_svg_icon_served_with_safety_headers(env):
     assert r.content == svg and r.headers["content-type"].startswith("image/svg+xml")
     assert "sandbox" in r.headers["content-security-policy"] and r.headers["x-content-type-options"] == "nosniff"
     assert put_media(client, svg).status_code == 415  # 设备不能上传 SVG
+
+
+def test_music_history_from_mac_and_windows(env):
+    client, clock, _ = env
+    p = client.app.state.presence
+    jay = {"player": "aimp", "title": "晴天", "artist": "周杰伦", "album": "叶惠美", "duration": 269}
+    yellow = {"player": "apple_music", "title": "Yellow", "artist": "Coldplay"}
+
+    def at(dt, data, token=TOKEN):
+        clock.t = T0 + dt
+        post(client, [{"kind": "music", "ts": clock.t, "ttl": 300, "data": data}], token=token)
+
+    at(0, {**jay, "state": "playing"}, WIN_TOKEN)
+    at(10, {**yellow, "state": "playing"})
+    at(100, {**jay, "state": "paused"}, WIN_TOKEN)
+    at(120, {**jay, "state": "playing"}, WIN_TOKEN)  # 暂停 20 秒后继续
+    at(250, {**yellow, "state": "paused"})
+    at(290, {**jay, "state": "paused"}, WIN_TOKEN)
+    clock.t = T0 + 600
+    p.update()
+
+    hist = [dict(r) for r in p.db.media_history("music", T0, clock.t)]
+    assert [(h["title"], h["artist"], h["player"], h["source"], h["start"], h["end"], h["seconds"]) for h in hist] == [
+        ("Yellow", "Coldplay", "apple_music", "mac", T0 + 10, T0 + 250, 240),
+        ("晴天", "周杰伦", "aimp", "windows", T0, T0 + 290, 270),  # 暂停的 20 秒不算
+    ]
+    assert hist[1]["album"] == "叶惠美"
+    top = [dict(r) for r in p.db.media_totals("music", T0, clock.t)]
+    assert [(t["key"], t["seconds"], t["plays"]) for t in top] == [("周杰伦 - 晴天", 270, 1), ("Coldplay - Yellow", 240, 1)]
+
+
+def test_video_history_fills_title_later(env):
+    from presence.sources.video import VideoMeta
+
+    client, clock, _ = env
+    p = client.app.state.presence
+
+    def fake_meta(site, vid):
+        if site == "youtube":
+            return None  # 查不到：记录里只有视频 ID
+        return VideoMeta(title="标题", owner="UP主", url=f"https://www.bilibili.com/video/{vid}")
+
+    p.fetch_video_meta = fake_meta
+    p.fetch_cover = lambda url, limit: None
+
+    def at(dt, data):
+        clock.t = T0 + dt
+        post(client, [{"kind": "video", "ts": clock.t, "ttl": 300, "data": {"position": 0, "duration": 600, **data}}])
+
+    bv = {"site": "bilibili", "id": "BV1xx411c7mD"}
+    at(0, {**bv, "page": 1, "state": "playing"})  # 这时还没查到标题
+    wait_for(client, lambda n: n["main"].get("card", {}).get("title"))
+    at(100, {**bv, "page": 1, "state": "paused"})
+    at(200, {**bv, "page": 2, "state": "playing"})  # 查到之后再看的，写入时就带标题
+    at(300, {**bv, "page": 2, "state": "paused"})
+    at(400, {"site": "youtube", "id": "dQw4w9WgXcQ", "state": "playing"})
+    at(450, {"site": "youtube", "id": "dQw4w9WgXcQ", "state": "paused"})
+    clock.t = T0 + 600
+    p.update()
+
+    hist = [dict(r) for r in p.db.media_history("video", T0, clock.t)]
+    assert [(h["key"], h["title"], h["artist"], h["player"], h["page"], h["seconds"]) for h in hist] == [
+        ("youtube:dQw4w9WgXcQ", None, None, "youtube", None, 50),
+        ("bilibili:BV1xx411c7mD", "标题", "UP主", "bilibili", 2, 100),
+        ("bilibili:BV1xx411c7mD", "标题", "UP主", "bilibili", 1, 100),
+    ]
+    top = [dict(r) for r in p.db.media_totals("video", T0, clock.t)]
+    assert [(t["key"], t["seconds"], t["plays"]) for t in top] == [("bilibili:BV1xx411c7mD", 200, 2),
+                                                                     ("youtube:dQw4w9WgXcQ", 50, 1)]

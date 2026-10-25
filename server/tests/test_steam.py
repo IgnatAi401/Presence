@@ -102,3 +102,48 @@ def test_steam_switch_game(env):
 
 def test_cover_url():
     assert steam.cover_url("10").endswith("/apps/10/header.jpg")
+
+
+def test_media_log_records_game_time(env):
+    client, clock, p, state = env
+    start = clock.t
+    def play(seconds):  # 每 30 秒查一次，和真实轮询一样
+        poll(client, p)
+        for _ in range(seconds // 30):
+            clock.t += 30
+            poll(client, p)
+
+    state["game"] = Playing("Hades", "1145360")
+    play(570)
+    clock.t += 30
+    state["game"] = Playing("Celeste", "504230")
+    play(300)
+
+    # 进行中的游戏算到查询的截止时间
+    rows = [dict(r) for r in p.db.media_totals("game", start, clock.t)]
+    assert rows == [
+        {"key": "1145360", "title": "Hades", "artist": None, "seconds": 600, "plays": 1},
+        {"key": "504230", "title": "Celeste", "artist": None, "seconds": 300, "plays": 1},
+    ]
+
+    state["game"] = None
+    poll(client, p)
+    clock.t += 1000
+    p.update()
+    log = p.db.conn.execute("SELECT * FROM media_log ORDER BY start").fetchall()
+    assert [(r["type"], r["source"], r["end"] - r["start"]) for r in log] == [("game", "steam", 600), ("game", "steam", 300)]
+    assert dict(p.db.media_totals("game", start, clock.t)[1])["seconds"] == 300  # 退出后不再增加
+
+
+def test_media_log_dangling_closed_on_restart(tmp_path):
+    from presence.db import DB  # noqa: PLC0415
+    from presence.engine import Interval  # noqa: PLC0415
+
+    db = DB(tmp_path / "p.db")
+    iv = Interval(line="activity", category="game", start=100, source="windows", detail="Minecraft",
+                  meta={"media": {"type": "game", "key": "javaw.exe", "title": "Minecraft", "play": "p1"}})
+    db.save_intervals([iv])
+    db.save_media_log([iv])
+    db.conn.execute("INSERT INTO signals (source, kind, ts, ttl, data_json, received_at) VALUES ('windows', 'game', 400, 60, '{}', 400)")
+    db.close_dangling(db.last_signal_ts())
+    assert db.conn.execute("SELECT end FROM media_log").fetchone()[0] == 400

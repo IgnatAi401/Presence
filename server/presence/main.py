@@ -223,6 +223,8 @@ class Presence:
             now = self.clock()
             if meta:
                 self.db.save_video_meta(site, vid, now, meta.title, meta.owner, meta.url, cover_hash, meta.parts)
+                if meta.title:
+                    self.db.fill_video_log(site, vid, meta.title, meta.owner)
                 log.info("视频信息：%s/%s %s", site, vid, meta.title)
             else:
                 self.db.save_video_meta(site, vid, now)
@@ -375,7 +377,15 @@ class Presence:
             self.hub.publish(json.dumps(payload, ensure_ascii=False))
 
     def persist(self) -> None:
-        self.db.save_intervals(self.engine.drain_intervals())
+        ivs = self.engine.drain_intervals()
+        self.db.save_intervals(ivs)
+        for iv in ivs:
+            m = iv.meta.get("media")
+            if m and m["type"] == "video" and not m.get("title"):
+                row = self.cached_video_meta(m["site"], m["vid"])
+                if row is not None and row["title"] is not None:
+                    m["title"], m["artist"] = row["title"], row["owner"]
+        self.db.save_media_log(ivs)
         self.db.save_manual(self.engine.drain_manual())
 
     def payload(self, snap: Snapshot) -> dict[str, Any]:

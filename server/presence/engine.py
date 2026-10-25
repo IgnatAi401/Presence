@@ -448,6 +448,27 @@ def _feed_spec(kind: str, data: dict) -> tuple[str, bool, tuple] | None:
     return None
 
 
+def _media_meta(category: str, data: dict, identity: tuple) -> dict[str, Any] | None:
+    """要记进 media_log 的片段：返回那一行的内容（key 用来汇总同一首歌 / 同一个游戏 / 同一个视频）。"""
+    if category == "game":
+        name = data.get("name") or data.get("exe")
+        return {"type": "game", "key": str(data.get("appid") or identity[0]), "title": name}
+    if category == "music":
+        title, artist = data.get("title") or "", data.get("artist") or ""
+        if not title:
+            return None
+        return {"type": "music", "key": f"{artist} - {title}" if artist else title, "title": title,
+                "artist": artist or None, "album": data.get("album") or None, "player": data.get("player")}
+    if category == "video":
+        site, vid, page = identity
+        if not (isinstance(site, str) and isinstance(vid, str)):
+            return None
+        # 标题和 UP 主由服务器查到后再补（app 层），引擎只知道是哪个视频
+        return {"type": "video", "key": f"{site}:{vid}", "site": site, "vid": vid,
+                "page": int(page) if isinstance(page, (int, float)) else None}
+    return None
+
+
 # ---------------------------------------------------------------- 引擎
 
 
@@ -555,8 +576,13 @@ class Engine:
                 del self.ended[k]  # 同一等级互斥
         detail = data.get("name") if category == "game" else None
         interrupted = prev is not None and ts - (prev.interval.end or ts) >= self.timing.enter_sec
-        iv = self.open(ACTIVITY, category, ts, source=source, detail=detail,
-                       meta={"resumed": True} if interrupted else {})
+        meta: dict[str, Any] = {"resumed": True} if interrupted else {}
+        iv = self.open(ACTIVITY, category, ts, source=source, detail=detail, meta=meta)
+        if media := _media_meta(category, data, identity):
+            # 暂停后在余温内继续同一首（同一个游戏、同一个视频），算同一次播放
+            media["play"] = prev.interval.meta.get("media", {}).get("play") if prev is not None else None
+            media["play"] = media["play"] or iv.id
+            meta["media"] = media
         since = prev.since if prev is not None else ts
         self.feeds[key] = Feed(key, category, identity, source, data, since, ts, ts + ttl, iv, session=session or since,
                                data_ts=ts)

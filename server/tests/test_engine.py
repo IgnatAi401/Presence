@@ -399,7 +399,7 @@ def test_music_resume_within_linger_keeps_since():
     e.ingest("windows", "music", T0 + 130, 300, {"title": "A", "state": "playing"})
     s = sim.snap(140)
     assert s.main.since == T0 and s.main.card["state"] == "playing"
-    assert sim.segments("music")[1].meta == {"resumed": True}
+    assert sim.segments("music")[1].meta["resumed"] is True
 
 
 def test_music_from_two_players_coexist():
@@ -562,3 +562,32 @@ def test_no_web_card_for_local_hosts():
     for host in ("localhost", "127.0.0.1", "nas.local", "192.168.1.5"):
         s = Sim().mac(0, VSCODE).mac(10, {**safari(host), "title": "本地"}).snap(11)
         assert s.main.card is None, host
+
+
+def test_music_media_meta_shares_play_across_pause():
+    e = (sim := Sim()).e
+    song = {"player": "aimp", "title": "晴天", "artist": "周杰伦", "album": "叶惠美"}
+    e.ingest("windows", "music", T0, 300, {**song, "state": "playing"})
+    e.ingest("windows", "music", T0 + 100, 300, {**song, "state": "paused"})
+    e.ingest("windows", "music", T0 + 130, 300, {**song, "state": "playing"})  # 余温 1 分钟内继续
+    e.ingest("windows", "music", T0 + 200, 300, {**song, "title": "七里香", "album": "七里香", "state": "playing"})
+    a, b, c = (iv.meta["media"] for iv in sim.segments("music"))
+    assert a == {"type": "music", "key": "周杰伦 - 晴天", "title": "晴天", "artist": "周杰伦", "album": "叶惠美",
+                 "player": "aimp", "play": a["play"]}
+    assert b["play"] == a["play"]  # 暂停后继续：同一次播放
+    assert c["key"] == "周杰伦 - 七里香" and c["play"] != a["play"]  # 换歌：新的一次
+
+
+def test_music_replay_after_linger_is_new_play():
+    e = (sim := Sim()).e
+    e.ingest("mac", "music", T0, 300, {"player": "apple_music", "title": "A", "state": "playing"})
+    e.ingest("mac", "music", T0 + 100, 300, {"player": "apple_music", "title": "A", "state": "paused"})
+    e.ingest("mac", "music", T0 + 400, 300, {"player": "apple_music", "title": "A", "state": "playing"})
+    a, b = (iv.meta["media"] for iv in sim.segments("music"))
+    assert a["key"] == "A" and a["artist"] is None and b["play"] != a["play"]
+
+
+def test_music_without_title_not_logged():
+    e = (sim := Sim()).e
+    e.ingest("mac", "music", T0, 300, {"player": "apple_music", "title": "", "state": "playing"})
+    assert "media" not in sim.segments("music")[0].meta

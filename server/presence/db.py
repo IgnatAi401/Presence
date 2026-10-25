@@ -95,6 +95,29 @@ MIGRATIONS = [
     """,
     # 图标来源从 Google 改成网站自己声明的图标：清空旧结果，下次用到时重新取
     "DELETE FROM site_icons;",
+    """
+    CREATE TABLE media_log (
+        id TEXT PRIMARY KEY,             -- 对应 segments 里同一段的 id
+        type TEXT NOT NULL,              -- game / music / video
+        key TEXT NOT NULL,               -- 汇总用：游戏是 Steam appid（非 Steam 用进程名或游戏名），歌是“歌手 - 歌名”，
+                                         -- 视频是“网站:视频 ID”，例如 bilibili:BV1xx411c7mD
+        title TEXT,                      -- 视频标题查到后才补上，可能暂时为 NULL
+        artist_or_owner TEXT,            -- 歌手；视频的 UP 主 / 频道
+        album TEXT,
+        player TEXT,                     -- 播放器：aimp / apple_music；视频是网站 bilibili / youtube；游戏为 NULL
+        page INTEGER,                    -- 视频的分 P（第几集），没有为 NULL
+        play TEXT NOT NULL,              -- 同一次播放：暂停后在余温内继续，几段共用一个值
+        start REAL NOT NULL,
+        end REAL,                        -- NULL 表示仍在进行
+        source TEXT                      -- 设备：mac / windows / steam
+    );
+    CREATE INDEX media_log_start ON media_log (start);
+    CREATE INDEX media_log_key ON media_log (type, key);
+    -- 补上建表前已有的游戏片段
+    INSERT INTO media_log (id, type, key, title, play, start, end, source)
+    SELECT id, 'game', detail, detail, id, start, end, source
+    FROM segments WHERE line = 'activity' AND category = 'game' AND detail IS NOT NULL;
+    """,
 ]
 
 
@@ -152,6 +175,7 @@ class DB:
 
     def close_dangling(self, at: float) -> int:
         """启动时：上次没结束的片段截止到最后一条信号的时间，停机时间不算进任何类别。"""
+        self.conn.execute("UPDATE media_log SET end = MAX(start, ?) WHERE end IS NULL", (at,))
         return self.conn.execute(
             "UPDATE segments SET end = MAX(start, ?) WHERE end IS NULL", (at,)
         ).rowcount
@@ -160,6 +184,61 @@ class DB:
         return self.conn.execute(
             "SELECT * FROM segments WHERE start < ? AND (end IS NULL OR end > ?) ORDER BY start",
             (end, start),
+        ).fetchall()
+
+    # -- media_log
+
+    def save_media_log(self, ivs: list[Interval]) -> None:
+        """游戏、听歌、看视频的片段同步记一份到 media_log：游戏时长、听歌历史、看过的视频。"""
+        rows = []
+        for iv in ivs:
+            m = iv.meta.get("media")
+            if m:
+                rows.append((iv.id, m["type"], m["key"], m.get("title"), m.get("artist"), m.get("album"),
+                             m.get("player") or m.get("site"), m.get("page"), m["play"], iv.start, iv.end, iv.source))
+        self.conn.executemany(
+            """
+            INSERT INTO media_log (id, type, key, title, artist_or_owner, album, player, page, play, start, end, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (id) DO UPDATE SET end = excluded.end,
+                title = COALESCE(excluded.title, title), artist_or_owner = COALESCE(excluded.artist_or_owner, artist_or_owner)
+            """,
+            rows,
+        )
+
+    def fill_video_log(self, site: str, vid: str, title: str, owner: str | None) -> None:
+        """视频信息查到后，补上之前没有标题的观看记录。"""
+        self.conn.execute(
+            "UPDATE media_log SET title = ?, artist_or_owner = ? WHERE type = 'video' AND key = ? AND title IS NULL",
+            (title, owner, f"{site}:{vid}"),
+        )
+
+    def media_totals(self, type_: str, start: float, end: float) -> list[sqlite3.Row]:
+        """[start, end) 内每个 key 的累计秒数（未结束的算到 end）和播放次数，按时长从多到少。"""
+        return self.conn.execute(
+            """
+            SELECT key, MAX(title) AS title, MAX(artist_or_owner) AS artist,
+                   SUM(MIN(COALESCE(end, ?), ?) - MAX(start, ?)) AS seconds, COUNT(DISTINCT play) AS plays
+            FROM media_log
+            WHERE type = ? AND start < ? AND (end IS NULL OR end > ?)
+            GROUP BY key ORDER BY seconds DESC
+            """,
+            (end, end, start, type_, end, start),
+        ).fetchall()
+
+    def media_history(self, type_: str, start: float, end: float) -> list[sqlite3.Row]:
+        """[start, end) 内的播放记录，按开始时间倒序；暂停拆开的几段合成一次播放。"""
+        return self.conn.execute(
+            """
+            SELECT play, key, MAX(title) AS title, MAX(artist_or_owner) AS artist, MAX(album) AS album,
+                   MAX(player) AS player, MAX(page) AS page, MAX(source) AS source, MIN(start) AS start,
+                   CASE WHEN COUNT(end) = COUNT(*) THEN MAX(end) END AS end,
+                   SUM(COALESCE(end, ?) - start) AS seconds
+            FROM media_log
+            WHERE type = ? AND start < ? AND (end IS NULL OR end > ?)
+            GROUP BY play ORDER BY start DESC
+            """,
+            (end, type_, end, start),
         ).fetchall()
 
     # -- manual_states
