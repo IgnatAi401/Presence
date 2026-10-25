@@ -329,6 +329,17 @@ def test_wake_ends_sleep():
     assert sim.segments("sleep")[0].end == T0 + 100
 
 
+def test_stop_eating_closes_only_eat_and_keeps_class_office_custom():
+    sim = Sim().manual(0, "office").manual(1, "custom", text="看书")
+    sim.e.set_courses([course(0, 3000)], T0 + 1)
+    sim.manual(10, "eat").manual(100, "stop_eat")
+    assert cats(sim.snap(110)) == ("class", ["office", "custom"])
+    eat = sim.segments("eat")
+    assert len(eat) == 1 and eat[0].end == T0 + 100
+    sim.manual(120, "stop_eat")
+    assert cats(sim.snap(130)) == ("class", ["office", "custom"])
+
+
 # ---------------------------------------------------------------- 办公室
 
 

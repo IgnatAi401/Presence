@@ -608,9 +608,10 @@ class Engine:
         elif state == "leave_office":
             if m := self.manual.get("office"):
                 self.end_manual(m, ts)
-        elif state == "wake":
+        elif state in ("wake", "stop_eat"):
             m = self.manual.get("anchor")
-            if m and m.state == "sleep":
+            target = "sleep" if state == "wake" else "eat"
+            if m and m.state == target:
                 self.end_manual(m, ts)
         elif state == "cancel_class":
             for c in self.courses:
