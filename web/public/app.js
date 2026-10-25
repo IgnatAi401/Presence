@@ -91,6 +91,7 @@ function sessionSec(card, t) {
 
 function metaText(item, t) {
   const parts = item.detail ? [item.detail] : []; // 工作区名放最前面
+  if (item.category === "phone") parts.push("iPhone");
   if (item.type === "anchor" && item.category === "class" && item.until) {
     parts.push(`还剩 ${dur(item.until - t)}`);
   } else if (item.category === "video" && item.card?.session_since) {
@@ -210,7 +211,7 @@ function renderSide(t) {
   const list = $("side");
   list.replaceChildren(...state.side.map((item, index) => {
     const card = renderCard(item, t);
-    const sub = [];
+    const sub = item.category === "phone" ? ["iPhone"] : [];
     if (item.slacking) sub.push(`🐟 摸鱼中 ${dur(t - item.slacking.since)}`);
     else if (item.card?.state === "paused" && !readingComments(item.card)) sub.push("已暂停");
     else if (item.category === "video" && item.card?.session_since) sub.push(dur(sessionSec(item.card, t)));

@@ -98,7 +98,7 @@ MIGRATIONS = [
     """
     CREATE TABLE media_log (
         id TEXT PRIMARY KEY,             -- 对应 segments 里同一段的 id
-        type TEXT NOT NULL,              -- game / music / video
+        type TEXT NOT NULL,              -- game / music / video / app
         key TEXT NOT NULL,               -- 汇总用：游戏是 Steam appid（非 Steam 用进程名或游戏名），歌是“歌手 - 歌名”，
                                          -- 视频是“网站:视频 ID”，例如 bilibili:BV1xx411c7mD
         title TEXT,                      -- 视频标题查到后才补上，可能暂时为 NULL
@@ -109,7 +109,7 @@ MIGRATIONS = [
         play TEXT NOT NULL,              -- 同一次播放：暂停后在余温内继续，几段共用一个值
         start REAL NOT NULL,
         end REAL,                        -- NULL 表示仍在进行
-        source TEXT                      -- 设备：mac / windows / steam
+        source TEXT                      -- 设备：mac / windows / iphone / steam
     );
     CREATE INDEX media_log_start ON media_log (start);
     CREATE INDEX media_log_key ON media_log (type, key);
@@ -117,6 +117,21 @@ MIGRATIONS = [
     INSERT INTO media_log (id, type, key, title, play, start, end, source)
     SELECT id, 'game', detail, detail, id, start, end, source
     FROM segments WHERE line = 'activity' AND category = 'game' AND detail IS NOT NULL;
+    """,
+    """
+    -- 旧手机片段没有保存 App 名，从仍保留的打开信号中恢复；不猜测缺失数据。
+    WITH phone AS (
+        SELECT s.*, (
+            SELECT json_extract(data_json, '$.app') FROM signals
+            WHERE source = s.source AND kind = 'phone_app' AND ts = s.start
+              AND COALESCE(json_extract(data_json, '$.event'), 'open') != 'close'
+              AND json_type(data_json, '$.app') = 'text'
+            ORDER BY id DESC LIMIT 1
+        ) AS app
+        FROM segments s WHERE line = 'activity' AND category = 'phone'
+    )
+    INSERT INTO media_log (id, type, key, title, play, start, end, source)
+    SELECT id, 'app', app, app, id, start, end, source FROM phone WHERE app != '';
     """,
 ]
 
@@ -189,7 +204,7 @@ class DB:
     # -- media_log
 
     def save_media_log(self, ivs: list[Interval]) -> None:
-        """游戏、听歌、看视频的片段同步记一份到 media_log：游戏时长、听歌历史、看过的视频。"""
+        """游戏、听歌、看视频和手机 App 片段同步记入历史，保留设备来源。"""
         rows = []
         for iv in ivs:
             m = iv.meta.get("media")
@@ -214,14 +229,14 @@ class DB:
         )
 
     def media_totals(self, type_: str, start: float, end: float) -> list[sqlite3.Row]:
-        """[start, end) 内每个 key 的累计秒数（未结束的算到 end）和播放次数，按时长从多到少。"""
+        """[start, end) 内按内容和设备分别累计秒数、次数，按时长从多到少。"""
         return self.conn.execute(
             """
-            SELECT key, MAX(title) AS title, MAX(artist_or_owner) AS artist,
+            SELECT key, source, MAX(title) AS title, MAX(artist_or_owner) AS artist,
                    SUM(MIN(COALESCE(end, ?), ?) - MAX(start, ?)) AS seconds, COUNT(DISTINCT play) AS plays
             FROM media_log
             WHERE type = ? AND start < ? AND (end IS NULL OR end > ?)
-            GROUP BY key ORDER BY seconds DESC
+            GROUP BY key, source ORDER BY seconds DESC
             """,
             (end, end, start, type_, end, start),
         ).fetchall()
@@ -236,7 +251,7 @@ class DB:
                    SUM(COALESCE(end, ?) - start) AS seconds
             FROM media_log
             WHERE type = ? AND start < ? AND (end IS NULL OR end > ?)
-            GROUP BY play ORDER BY start DESC
+            GROUP BY play, source ORDER BY start DESC
             """,
             (end, type_, end, start),
         ).fetchall()

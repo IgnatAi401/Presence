@@ -122,8 +122,8 @@ def test_media_log_records_game_time(env):
     # 进行中的游戏算到查询的截止时间
     rows = [dict(r) for r in p.db.media_totals("game", start, clock.t)]
     assert rows == [
-        {"key": "1145360", "title": "Hades", "artist": None, "seconds": 600, "plays": 1},
-        {"key": "504230", "title": "Celeste", "artist": None, "seconds": 300, "plays": 1},
+        {"key": "1145360", "source": "steam", "title": "Hades", "artist": None, "seconds": 600, "plays": 1},
+        {"key": "504230", "source": "steam", "title": "Celeste", "artist": None, "seconds": 300, "plays": 1},
     ]
 
     state["game"] = None

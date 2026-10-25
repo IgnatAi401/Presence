@@ -15,6 +15,7 @@ from presence.stats import day_bounds
 RULES = Rules.load(Path(__file__).resolve().parent.parent / "config" / "rules.yaml")
 TOKEN = "test-token-mac"
 WIN_TOKEN = "test-token-windows"
+PHONE_TOKEN = "test-token-iphone"
 T0 = 1_800_000_000.0  # 2027-01-15 16:00 北京时间
 
 
@@ -28,7 +29,7 @@ class Clock:
 
 @pytest.fixture
 def env(tmp_path):
-    settings = Settings(devices={"mac": TOKEN, "windows": WIN_TOKEN}, db_path=tmp_path / "p.db")
+    settings = Settings(devices={"mac": TOKEN, "windows": WIN_TOKEN, "iphone": PHONE_TOKEN}, db_path=tmp_path / "p.db")
     clock = Clock(T0)
     app = create_app(settings, RULES, clock=clock, background=False)
     with TestClient(app) as client:
@@ -328,6 +329,70 @@ def test_music_history_from_mac_and_windows(env):
     assert hist[1]["album"] == "叶惠美"
     top = [dict(r) for r in p.db.media_totals("music", T0, clock.t)]
     assert [(t["key"], t["seconds"], t["plays"]) for t in top] == [("周杰伦 - 晴天", 270, 1), ("Coldplay - Yellow", 240, 1)]
+
+
+def test_phone_app_history_switch_close_and_reopen(env):
+    client, clock, _ = env
+    db = client.app.state.presence.db
+
+    def at(dt, app, event="open"):
+        clock.t = T0 + dt
+        assert post(client, [{"kind": "phone_app", "ttl": 1800,
+                              "data": {"app": app, "event": event}}], PHONE_TOKEN).status_code == 200
+
+    # Mac 的实际歌曲独立记录，手机音乐 App 的前台状态不是歌曲播放。
+    post(client, [{"kind": "music", "ttl": 1800, "data": {
+        "player": "apple_music", "title": "Yellow", "state": "playing"}}])
+    at(0, "X")
+    at(20, "X")  # 重复打开续期，不另开记录
+    at(60, "Apple Music")
+    at(65, "X", "close")  # 上个 App 的延迟关闭不影响当前 App
+    ongoing = db.media_history("app", T0, clock.t)
+    assert (ongoing[0]["title"], ongoing[0]["end"], ongoing[0]["seconds"]) == ("Apple Music", None, 5)
+    at(120, "Apple Music", "close")
+    at(125, "Apple Music", "close")  # 重复关闭不重复计时
+    at(140, "X")
+    at(180, "X", "close")
+    hist = db.media_history("app", T0, clock.t)
+    assert [(r["title"], r["source"], r["start"], r["end"], r["seconds"]) for r in hist] == [
+        ("X", "iphone", T0 + 140, T0 + 180, 40),
+        ("Apple Music", "iphone", T0 + 60, T0 + 120, 60),
+        ("X", "iphone", T0, T0 + 60, 60),
+    ]
+    assert [(r["key"], r["source"], r["seconds"], r["plays"])
+            for r in db.media_totals("app", T0, clock.t)] == [
+        ("X", "iphone", 100, 2), ("Apple Music", "iphone", 60, 1)]
+    assert [(r["title"], r["source"], r["seconds"])
+            for r in db.media_history("music", T0, clock.t)] == [("Yellow", "mac", 180)]
+
+
+@pytest.mark.parametrize("tick_before_reopen", [False, True])
+@pytest.mark.parametrize("next_app", ["X", "Claude"])
+def test_phone_history_timeout_is_capped_at_expiry(env, tick_before_reopen, next_app):
+    client, clock, _ = env
+    p = client.app.state.presence
+    post(client, [{"kind": "phone_app", "ttl": 1800, "data": {"app": "X"}}], PHONE_TOKEN)
+    clock.t += 1900
+    if tick_before_reopen:
+        p.update()
+    post(client, [{"kind": "phone_app", "ttl": 1800, "data": {"app": next_app}}], PHONE_TOKEN)
+    hist = p.db.media_history("app", T0, clock.t + 10)
+    assert len(hist) == 2
+    assert (hist[1]["end"], hist[1]["seconds"]) == (T0 + 1800, 1800)
+    # 日界线查询只累计查询范围内的时长
+    assert p.db.media_totals("app", T0 + 600, T0 + 1200)[0]["seconds"] == 600
+
+
+def test_history_totals_keep_same_content_on_devices_separate(env):
+    client, clock, _ = env
+    for token in (TOKEN, PHONE_TOKEN):
+        post(client, [{"kind": "music", "ttl": 300, "data": {
+            "title": "Yellow", "state": "playing"}}], token)
+    clock.t += 60
+    db = client.app.state.presence.db
+    rows = db.media_totals("music", T0, clock.t)
+    assert {(r["key"], r["source"], r["seconds"]) for r in rows} == {
+        ("Yellow", "mac", 60), ("Yellow", "iphone", 60)}
 
 
 def test_video_history_fills_title_later(env):

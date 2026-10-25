@@ -452,7 +452,12 @@ def _feed_spec(kind: str, data: dict) -> tuple[str, bool, tuple] | None:
 
 
 def _media_meta(category: str, data: dict, identity: tuple) -> dict[str, Any] | None:
-    """要记进 media_log 的片段：返回那一行的内容（key 用来汇总同一首歌 / 同一个游戏 / 同一个视频）。"""
+    """历史明细：key 区分歌曲、游戏、视频或手机 App，设备来源另存。"""
+    if category == "phone":
+        app = data.get("app")
+        if isinstance(app, str) and app:
+            return {"type": "app", "key": app, "title": app}
+        return None
     if category == "game":
         name = data.get("name") or data.get("exe")
         return {"type": "game", "key": str(data.get("appid") or identity[0]), "title": name}
@@ -547,7 +552,7 @@ class Engine:
             # 手机同一时刻只有一个前台 App
             for k, f in list(self.feeds.items()):
                 if f.source == source and f.category == "phone" and f.identity != identity:
-                    self._end_feed(k, ts)
+                    self._end_feed(k, min(ts, f.expires))
 
         cur = self.feeds.get(key)
         session = None
@@ -555,7 +560,7 @@ class Engine:
             if active and ts <= cur.expires:
                 session = cur.session  # 直接换歌
             if ts > cur.expires:
-                self._end_feed(key, cur.last_ts)
+                self._end_feed(key, cur.expires if category == "phone" else cur.last_ts)
             else:
                 # 主动停止（暂停、关闭）才留余温；换歌、换 App 直接替换
                 stopped = not active and cur.identity == identity
@@ -667,7 +672,7 @@ class Engine:
         self.mac.check(now)
         for key, f in list(self.feeds.items()):
             if now > f.expires:
-                self._end_feed(key, f.last_ts)
+                self._end_feed(key, f.expires if f.category == "phone" else f.last_ts)
         for key, f in list(self.ended.items()):
             if f.until is None or now >= f.until:
                 del self.ended[key]
