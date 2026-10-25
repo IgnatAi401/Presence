@@ -697,7 +697,7 @@ class Engine:
         d = self.rules.activities.get(category)
         label = _fmt(d.label, **(values or {})) if d else category
         if category == "video" and values and values.get("name"):
-            label = f"在看 {values['name']}"
+            label = f"看 {values['name']}"  # 主状态前面有“正在”，这里不再写“在”
         if d and d.show_project and kw.get("project") and not kw.get("detail"):
             kw["detail"] = kw["project"]  # 搞科研 / 搞开发时公开工作区文件夹名
         return Item(type=ACTIVITY, category=category, label=label or category, since=since,
@@ -779,10 +779,8 @@ class Engine:
             card["updated_at"] = f.data_ts
             card["session_since"] = f.session  # 连续看视频的起点：换视频、余温内继续都接着算
             name = {"bilibili": "B站", "youtube": "YouTube"}.get(d.get("site") or "")
-            it = self.activity_item("video", f.since, values={"name": name}, card=card)
-            if d.get("viewing") == "comments":
-                it.label = "在看评论"  # 视频滚出画面了，卡片里仍显示是哪个视频
-            return it
+            # 在看评论区时标题不变，只在卡片小字里注明（card.viewing）
+            return self.activity_item("video", f.since, values={"name": name}, card=card)
         if f.category == "game":
             card = {"name": d.get("name"), "appid": d.get("appid"), "since": f.since}
             return self.activity_item("game", f.since, values={"name": d.get("name") or d.get("exe")}, card=card)

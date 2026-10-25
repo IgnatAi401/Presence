@@ -96,7 +96,7 @@ def test_unknown_app_keeps_current():
 def test_overleaf_is_research_and_bilibili_video():
     assert Sim().mac(0, safari("www.overleaf.com")).snap(1).main.category == "research"
     s = Sim().mac(0, safari("www.bilibili.com")).snap(1)
-    assert s.main.category == "video" and s.main.label == "在看 B站"
+    assert s.main.category == "video" and s.main.label == "看 B站"
 
 
 def test_reference_without_context_is_browse():
@@ -151,7 +151,7 @@ def test_same_tier_replaces_immediately():
 def test_low_tier_lingers_one_minute():
     sim = Sim().mac(0, safari("www.bilibili.com")).mac(100, MATLAB)
     s = sim.snap(130)
-    assert cats(s) == ("research", ["video"]) and s.side[0].label == "在看 B站"
+    assert cats(s) == ("research", ["video"]) and s.side[0].label == "看 B站"
     assert s.main.slacking_since is None
     assert cats(sim.snap(161)) == ("research", [])
     assert sim.segments("video")[0].end == T0 + 100  # 余温不计入时长
@@ -390,7 +390,7 @@ def test_music_feed_and_track_change():
     e.ingest("windows", "music", T0, 300, {"title": "A", "artist": "x", "state": "playing", "position": 3})
     sim.mac(10, VSCODE)
     s = sim.snap(20)
-    assert cats(s) == ("dev", ["music"]) and s.side[0].label == "正在听《A》"
+    assert cats(s) == ("dev", ["music"]) and s.side[0].label == "听《A》"
     e.ingest("windows", "music", T0 + 100, 300, {"title": "B", "artist": "x", "state": "playing"})
     assert len(sim.segments("music")) == 2
     e.ingest("windows", "music", T0 + 200, 300, {"title": "B", "artist": "x", "state": "paused"})
@@ -509,7 +509,7 @@ def test_reading_comments_after_video_keeps_card():
     sim.e.ingest("mac", "video", T0 + 610, 300, {**v, "state": "paused"})  # 看完了
     sim.e.ingest("mac", "video", T0 + 620, 300, {**v, "state": "paused", "viewing": "comments"})
     s = sim.snap(800)  # 暂停后的 1 分钟余温早过了，在看评论仍算在看
-    assert cats(s) == ("video", []) and s.main.label == "在看评论"
+    assert cats(s) == ("video", []) and s.main.label == "看 B站"  # 标题不变，小字注明在看评论
     assert s.main.card["viewing"] == "comments" and s.main.card["session_since"] == T0  # 从打开网站算起，没断
     sim.e.ingest("mac", "video", T0 + 900, 300, {**v, "state": "paused"})  # 滚回视频、关页面
     assert sim.segments("video")[-1].end == T0 + 900

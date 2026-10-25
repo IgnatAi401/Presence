@@ -66,7 +66,7 @@ def test_steam_start_and_stop(env):
     poll(client, p)
     now = client.get("/presence/api/now").json()
     assert now["main"]["category"] == "game"
-    assert now["main"]["label"] == "正在玩《Hades》"
+    assert now["main"]["label"] == "玩《Hades》"
     card = now["main"]["card"]
     assert card["appid"] == "1145360"
     assert card["cover"].startswith(p.settings.media_base + "/")
