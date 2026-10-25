@@ -13,6 +13,8 @@ import json
 import logging
 import os
 import re
+import signal
+import threading
 import time
 from collections import deque
 from collections.abc import Callable
@@ -75,23 +77,29 @@ class SignalBatch(BaseModel):
 
 
 class Hub:
-    """SSE 订阅者；每个连接一个小队列，满了就丢掉最旧的消息。"""
+    """SSE 订阅者；每个连接一个小队列，满了就丢掉最旧的消息。队列里收到 None 表示该结束连接了。"""
 
     def __init__(self, limit: int):
         self.limit = limit
-        self.queues: set[asyncio.Queue[str]] = set()
+        self.queues: set[asyncio.Queue[str | None]] = set()
+        self.closed = False
 
-    def subscribe(self) -> asyncio.Queue[str] | None:
-        if len(self.queues) >= self.limit:
+    def subscribe(self) -> asyncio.Queue[str | None] | None:
+        if self.closed or len(self.queues) >= self.limit:
             return None
-        q: asyncio.Queue[str] = asyncio.Queue(maxsize=8)
+        q: asyncio.Queue[str | None] = asyncio.Queue(maxsize=8)
         self.queues.add(q)
         return q
 
-    def unsubscribe(self, q: asyncio.Queue[str]) -> None:
+    def unsubscribe(self, q: asyncio.Queue[str | None]) -> None:
         self.queues.discard(q)
 
-    def publish(self, msg: str) -> None:
+    def close(self) -> None:
+        """服务器要关闭了：让所有推送连接自己结束，uvicorn 就不用一直等它们断开。"""
+        self.closed = True
+        self.publish(None)
+
+    def publish(self, msg: str | None) -> None:
         for q in self.queues:
             if q.full():
                 q.get_nowait()
@@ -452,6 +460,29 @@ async def _steam_loop(p: Presence) -> None:
         await asyncio.sleep(delay)
 
 
+def _close_streams_on_exit(hub: Hub) -> Callable[[], None]:
+    """在 uvicorn 的 Ctrl+C / kill 处理之前先结束推送连接；返回恢复原处理函数的函数。"""
+    if threading.current_thread() is not threading.main_thread():
+        return lambda: None
+    loop = asyncio.get_running_loop()
+    originals = {}
+
+    def handler(sig: int, frame: Any) -> None:
+        loop.call_soon_threadsafe(hub.close)
+        prev = originals[sig]
+        if callable(prev):
+            prev(sig, frame)
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        originals[sig] = signal.signal(sig, handler)
+
+    def restore() -> None:
+        for sig, prev in originals.items():
+            signal.signal(sig, prev)
+
+    return restore
+
+
 def create_app(
     settings: Settings | None = None,
     rules: Rules | None = None,
@@ -470,9 +501,11 @@ def create_app(
         tasks = [asyncio.create_task(_ticker(p)), asyncio.create_task(_calendar_loop(p))] if background else []
         if background and settings.steam.enabled:
             tasks.append(asyncio.create_task(_steam_loop(p)))
+        restore = _close_streams_on_exit(p.hub)
         try:
             yield
         finally:
+            restore()
             for t in [*tasks, *p.tasks]:
                 t.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -576,6 +609,8 @@ def create_app(
                 while True:
                     try:
                         msg = await asyncio.wait_for(q.get(), SSE_PING_SEC)
+                        if msg is None:
+                            return
                         yield f"event: now\ndata: {msg}\n\n"
                     except TimeoutError:
                         yield ": ping\n\n"  # 心跳，防止 Cloudflare 断开空闲连接
