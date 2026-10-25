@@ -14,6 +14,8 @@ const NAMES = {
   custom: "自定义", video: "看视频", browse: "上网", phone: "刷手机", music: "听歌",
 };
 
+const CARD_ROW = { music: "在听音乐", game: "在玩游戏" };
+
 const $ = (id) => document.getElementById(id);
 const hue = (category) => `var(--c-${category}, var(--amber))`;
 
@@ -92,9 +94,9 @@ function renderCard(item, t) {
     href = c.appid ? `https://store.steampowered.com/app/${encodeURIComponent(c.appid)}` : null;
   }
   const p = progress(c, t);
-  const body = h("div", {},
-    h("div", { class: "t" }, title),
-    sub ? h("div", { class: "s" }, sub) : null,
+  const body = h("div", { class: "body" },
+    h("div", { class: "t", title }, title),
+    sub ? h("div", { class: "s", title: sub }, sub) : null,
     p != null ? h("div", { class: "progress" }, h("i", { style: { width: `${(p * 100).toFixed(2)}%` } })) : null,
   );
   const attrs = { class: `card${item.category === "music" ? "" : " wide"}`, "--hue": hue(item.category) };
@@ -108,7 +110,10 @@ function renderMain(t) {
   const screen = document.querySelector(".screen");
   screen.style.setProperty("--hue", m.type === "idle" ? "var(--dim)" : hue(m.category));
   $("kicker").textContent = m.type === "idle" ? (m.category === "offline" ? "OFFLINE" : "AWAY") : KICKER[m.type];
-  $("main-label").textContent = m.label;
+  const label = $("main-label");
+  label.textContent = m.label;
+  label.title = m.label; // 超过两行时被截断，悬停看全文
+  label.classList.toggle("long", [...m.label].length > 14);
   const meta = $("main-meta");
   meta.replaceChildren();
   const parts = metaText(m, t);
@@ -124,13 +129,17 @@ function renderSide(t) {
   const list = $("side");
   list.replaceChildren(...state.side.map((item) => {
     const card = renderCard(item, t);
-    if (card) return h("li", { class: "has-card", "--hue": hue(item.category) }, card);
     const sub = [];
     if (item.slacking) sub.push(`🐟 摸鱼中 ${dur(t - item.slacking.since)}`);
+    else if (item.card?.state === "paused") sub.push("已暂停");
     else if (item.since) sub.push(dur(t - item.since));
-    return h("li", { "--hue": hue(item.category) },
-      h("span", { class: "lbl" }, item.detail ? `${item.label} · ${item.detail}` : item.label),
+    // 有卡片时歌名、游戏名在卡片里，上面这行只写类别
+    const text = card ? CARD_ROW[item.category] || item.label
+      : item.detail ? `${item.label} · ${item.detail}` : item.label;
+    return h("li", { class: card ? "has-card" : null, "--hue": hue(item.category) },
+      h("span", { class: "lbl", title: text }, text),
       sub.length ? h("span", { class: "sub" }, sub.join(" · ")) : null,
+      card,
     );
   }));
 }

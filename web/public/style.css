@@ -137,7 +137,13 @@ a { color: inherit; }
   line-height: 1.2;
   color: var(--hue, var(--paper));
   overflow-wrap: anywhere;
+  /* 超长课名、歌名：最多两行，悬停看全文 */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
+.main.long { font-size: clamp(24px, 5.2vw, 34px); }
 .meta { margin: 0; color: var(--dim); }
 .meta .slack { color: var(--amber); white-space: nowrap; }
 .notice { margin: 14px 0 0; color: var(--amber); }
@@ -156,10 +162,18 @@ a { color: inherit; }
   font-size: 20px;
   color: var(--hue, var(--dim));
 }
-.side .lbl { font-family: var(--cjk); color: var(--hue, var(--paper)); }
+.side .lbl {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--cjk);
+  color: var(--hue, var(--paper));
+}
 .side .sub { margin-left: auto; color: var(--dim); font-size: 13px; white-space: nowrap; }
-.side li.has-card { display: block; }
-.side li.has-card::before { content: none; }
+/* 带卡片的项：上面一行文字，卡片换到下一行占满宽度 */
+.side li.has-card { flex-wrap: wrap; }
+.side li.has-card .card { flex-basis: 100%; margin-top: 4px; }
 
 /* 音乐 / 视频 / 游戏卡片 */
 .card {
@@ -182,8 +196,17 @@ a { color: inherit; }
   background: var(--faint) center / cover no-repeat;
 }
 .card.wide .cover { aspect-ratio: 16 / 9; }
-.card .t { font-family: var(--cjk); font-weight: 600; overflow-wrap: anywhere; }
-.card .s { color: var(--dim); font-size: 13px; }
+.card .body { min-width: 0; }
+.card .t {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-family: var(--cjk);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.card .s { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); font-size: 13px; }
 .progress { height: 3px; margin-top: 8px; border-radius: 2px; background: var(--faint); overflow: hidden; }
 .progress i { display: block; height: 100%; width: 0; background: var(--hue, var(--amber)); }
 
