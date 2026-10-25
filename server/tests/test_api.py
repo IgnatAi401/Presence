@@ -144,6 +144,45 @@ def test_day_bounds_4am():
     assert datetime.fromtimestamp(start, tz).hour == 4 and end - start == 86400
 
 
+@pytest.mark.parametrize("restart_after", [3600, 90000])
+def test_outing_history_survives_restarts_and_midnight(tmp_path, restart_after):
+    settings = Settings(devices={"iphone": PHONE_TOKEN}, db_path=tmp_path / "p.db")
+    clock = Clock(T0)
+    with TestClient(create_app(settings, RULES, clock=clock, background=False)) as client:
+        post(client, [{"kind": "manual", "data": {"state": "out", "text": "探索老城区"}}], token=PHONE_TOKEN)
+    clock.t += restart_after
+    with TestClient(create_app(settings, RULES, clock=clock, background=False)) as client:
+        p = client.app.state.presence
+        if restart_after < 86400:
+            assert client.get("/presence/api/now").json()["main"]["since"] == T0
+            assert client.get("/presence/api/today").json()["totals"]["activity"]["out"] == restart_after
+            clock.t += 60
+            post(client, [{"kind": "manual", "data": {"state": "stop_out"}}], token=PHONE_TOKEN)
+        else:
+            assert client.get("/presence/api/now").json()["main"]["category"] != "out"
+        rows = p.db.conn.execute("SELECT * FROM segments WHERE category = 'out'").fetchall()
+        assert len(rows) == 1
+        assert rows[0]["detail"] == "探索老城区"
+        assert rows[0]["start"] == T0
+        assert rows[0]["end"] == T0 + min(restart_after + 60, 86400)
+        clock.t += 100
+    with TestClient(create_app(settings, RULES, clock=clock, background=False)) as client:
+        row = client.app.state.presence.db.conn.execute("SELECT * FROM segments WHERE category = 'out'").fetchone()
+        assert row["end"] == T0 + min(restart_after + 60, 86400)
+
+
+@pytest.mark.parametrize("data", [{"text": 123}, {"text": "游" * 121}, {"minutes": -1}, {"minutes": "oops"}, {"minutes": float("inf")}])
+def test_invalid_outing_is_rejected(env, data):
+    client, *_ = env
+    # JSON 不允许 Infinity，直接验证模型覆盖非有限数字。
+    from presence.main import SignalIn
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        SignalIn(kind="manual", data={"state": "out", **data})
+    if data.get("minutes") != float("inf"):
+        assert post(client, [{"kind": "manual", "data": {"state": "out", **data}}]).status_code == 422
+
+
 # -- 封面
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
@@ -521,3 +560,32 @@ def test_paused_video_privacy_change_removes_public_linger(env):
         clock.t = T0 + offset
         post(client, [{"kind": "video", "data": {"site": "youtube", "id": "toggle-paused", "state": state, "private": private}}])
     assert "toggle-paused" not in client.get("/presence/api/now").text
+
+
+@pytest.mark.parametrize('tier', [0, -1, 1.5, True, '1', 2147483648])
+def test_custom_priority_rejects_invalid_values(env, tier):
+    client, *_ = env
+    r = post(client, [{'kind': 'manual', 'data': {'state': 'custom', 'text': '写作', 'tier': tier}}], token=PHONE_TOKEN)
+    assert r.status_code == 422
+    assert not client.app.state.presence.engine.manual
+
+
+def test_custom_anchor_persists_and_stats_use_anchor_line(tmp_path):
+    settings = Settings(devices={'iphone': PHONE_TOKEN}, db_path=tmp_path / 'custom.db')
+    clock = Clock(T0)
+    with TestClient(create_app(settings, RULES, clock=clock, background=False)) as client:
+        post(client, [{'kind': 'manual', 'data': {'state': 'office'}},
+                      {'kind': 'manual', 'data': {'state': 'custom', 'text': '排练', 'tier': 1, 'minutes': 60}}], token=PHONE_TOKEN)
+        clock.t += 60
+        post(client, [{'kind': 'heartbeat'}], token=PHONE_TOKEN)
+        assert client.get('/presence/api/now').json()['main']['type'] == 'anchor'
+        today = client.get('/presence/api/today').json()
+        assert today['totals']['anchor']['custom'] == 60
+        assert 'custom' not in today['totals']['activity']
+        assert today['timeline'][-1]['label'] == '排练'
+    clock.t += 60
+    with TestClient(create_app(settings, RULES, clock=clock, background=False)) as client:
+        main = client.get('/presence/api/now').json()['main']
+        assert (main['category'], main['type'], main['label']) == ('custom', 'anchor', '排练')
+        post(client, [{'kind': 'manual', 'data': {'state': 'stop_custom'}}], token=PHONE_TOKEN)
+        assert client.get('/presence/api/now').json()['main']['category'] == 'office'

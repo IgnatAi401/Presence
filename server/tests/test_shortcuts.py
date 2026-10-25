@@ -29,7 +29,10 @@ def payload(title, outputs):
     for item in fields:
         key = item["WFKey"]["Value"]["string"]
         token = item["WFValue"]["Value"]
-        value = outputs[key] if token.get("attachmentsByRange") else token["string"]
+        if token.get("attachmentsByRange"):
+            value = outputs.get("tier", 2) if key == "tier" else outputs[key]
+        else:
+            value = token["string"]
         data[key] = float(value) if item["WFItemType"] == 3 else value
     return report_payload(data)
 
@@ -181,10 +184,39 @@ def test_stop_eating_does_not_end_sleep(phone):
     assert send("停止吃饭")["main"]["category"] == "sleep"
 
 
+@pytest.mark.parametrize("description", ["探索老城区", "街头摄影", "到处逛逛", '  拍“街头”\n夜景 📷  ', ""])
+def test_outing_shortcuts_and_saved_description(phone, description):
+    send, client, now = phone
+    send("到办公室")
+    started = send("出去玩", text=description)
+    expected = description.strip()
+    assert started["main"]["label"] == (f"出去玩 · {expected}" if expected else "出去玩")
+    assert "office" not in categories(started)
+    now[0] += 7200
+    send("吃饭")
+    assert "out" in categories(client.get("/presence/api/now").json())
+    assert categories(send("结束出去玩")) == {"eat"}
+    assert categories(send("结束出去玩")) == {"eat"}
+    db = client.app.state.presence.db
+    row = db.conn.execute("SELECT * FROM segments WHERE category = 'out'").fetchone()
+    assert row["detail"] == (expected or None)
+    assert row["end"] - row["start"] == 7202
+    saved = db.conn.execute("SELECT * FROM manual_states WHERE state = 'out'").fetchone()
+    assert saved["ended_at"] == row["end"]
+
+
+def test_outing_export_has_optional_safe_text():
+    prompt = parameters("出去玩", "ask")[0]
+    assert prompt["WFInputType"] == "Text"
+    assert prompt["WFAskActionDefaultAnswer"] == "到处逛逛"
+    assert parameters("出去玩", "text.replace")[0]["WFInput"]["WFSerializationType"] == "WFTextTokenString"
+    assert payload("出去玩", {"text": '街头摄影 "夜景"\n📷'})["data"]["text"] == '街头摄影 "夜景"\n📷'
+
+
 def test_exports_use_shared_reporter_and_safe_json():
     files = list(SHORTCUTS.glob("*.shortcut"))
-    assert len(files) == 8
-    for title in ("睡觉", "起床", "吃饭", "停止吃饭", "到办公室", "离开办公室", "自定义状态"):
+    assert len(files) == 11
+    for title in ("睡觉", "起床", "吃饭", "停止吃饭", "到办公室", "离开办公室", "出去玩", "结束出去玩", "自定义状态", "退出自定义状态"):
         run = parameters(title, "runworkflow")[0]
         assert run["WFWorkflowName"] == "Presence · 上报"
         assert run["WFShowWorkflow"] is False
@@ -216,6 +248,9 @@ def test_exports_use_shared_reporter_and_safe_json():
     assert "Input" in count
     duration = parameters("自定义状态", "ask")[1]
     assert duration["WFAskActionDefaultAnswerNumber"] == 120
+    priority = parameters("自定义状态", "ask")[2]
+    assert priority["WFInputType"] == "Number" and priority["WFAskActionDefaultAnswerNumber"] == 2
+    assert priority["WFAskActionAllowsDecimalNumbers"] is False
     # 检查魔术变量均引用本文件中此前的动作，避免未绑定输入。
     def references(value):
         if isinstance(value, dict):
@@ -273,3 +308,16 @@ def test_phone_route_does_not_replace_custom_and_wrong_close_is_safe(phone):
     assert [item['label'] for item in late['side']] == ['在刷 B站']
     assert late['side'][0]['app'] == 'B站'  # 在伴随状态中同样提供图标标识
     assert categories(send({'kind': 'phone_app', 'app': 'B站', 'event': 'close'})) == {'custom'}
+
+
+@pytest.mark.parametrize('tier', [1, 2, 3, 4, 7])
+def test_custom_priority_and_exit_export_contract(phone, tier):
+    send, _, _ = phone
+    send('到办公室')
+    s = send('自定义状态', text='写作', minutes=120, tier=tier)
+    custom = next(i for i in [s['main'], *s['side']] if i['category'] == 'custom')
+    assert custom['type'] == ('anchor' if tier == 1 else 'activity')
+    if tier != 1:
+        assert custom['tier'] == tier
+    assert categories(send('退出自定义状态')) == {'office'}
+    assert categories(send('退出自定义状态')) == {'office'}

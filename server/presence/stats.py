@@ -63,7 +63,9 @@ def _main_at(active: list[dict[str, Any]], rules: Rules) -> dict[str, Any] | Non
 def public_label(s: dict[str, Any], rules: Rules) -> str:
     if s["category"] == "class" and s.get("course"):
         return s["course"]
-    if s["category"] in ("game", "custom", "out") and s.get("detail"):
+    if s["category"] == "out" and s.get("detail"):
+        return f"出去玩 · {s['detail']}"
+    if s["category"] in ("game", "custom") and s.get("detail"):
         return s["detail"]
     return rules.short(s["category"])
 

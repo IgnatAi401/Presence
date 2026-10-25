@@ -41,7 +41,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>WFCommentActionText</key>
-				<string>手动输入公开状态和持续分钟数。默认等级 2；锚定状态仍优先。</string>
+				<string>输入文字、持续分钟数和优先级。1 为优先显示的自定义锚定；2、3…为活动等级。到期或运行“退出自定义状态”结束。</string>
 			</dict>
 		</dict>
 		<dict>
@@ -380,6 +380,147 @@
 		</dict>
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.ask</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>WFAskActionPrompt</key>
+				<string>设置优先级：1 = 锚定状态（优先显示）；2、3… = 对应活动等级，数字越小越优先。</string>
+				<key>WFInputType</key>
+				<string>Number</string>
+				<key>WFAskActionDefaultAnswerNumber</key>
+				<integer>2</integer>
+				<key>WFAskActionAllowsDecimalNumbers</key>
+				<false/>
+				<key>WFAskActionAllowsNegativeNumbers</key>
+				<false/>
+				<key>UUID</key>
+				<string>A240A4D1-3432-587A-8765-AC6F97D2C9A9</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>WFControlFlowMode</key>
+				<integer>0</integer>
+				<key>GroupingIdentifier</key>
+				<string>148D08E0-AA74-5499-8181-6EFF318BB549</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Type</key>
+					<string>Variable</string>
+					<key>Variable</key>
+					<dict>
+						<key>Value</key>
+						<dict>
+							<key>Type</key>
+							<string>ActionOutput</string>
+							<key>OutputUUID</key>
+							<string>A240A4D1-3432-587A-8765-AC6F97D2C9A9</string>
+						</dict>
+						<key>WFSerializationType</key>
+						<string>WFTextTokenAttachment</string>
+					</dict>
+				</dict>
+				<key>WFCondition</key>
+				<integer>101</integer>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.alert</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>WFAlertActionTitle</key>
+				<string>Presence</string>
+				<key>WFAlertActionMessage</key>
+				<string>请输入优先级：1 为锚定状态，2、3… 为活动等级。</string>
+				<key>WFAlertActionCancelButtonShown</key>
+				<false/>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.exit</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict/>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>WFControlFlowMode</key>
+				<integer>2</integer>
+				<key>GroupingIdentifier</key>
+				<string>148D08E0-AA74-5499-8181-6EFF318BB549</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>WFControlFlowMode</key>
+				<integer>0</integer>
+				<key>GroupingIdentifier</key>
+				<string>381D5055-1879-57E3-A0B1-AB8B3ED828FC</string>
+				<key>WFInput</key>
+				<dict>
+					<key>Type</key>
+					<string>Variable</string>
+					<key>Variable</key>
+					<dict>
+						<key>Value</key>
+						<dict>
+							<key>Type</key>
+							<string>ActionOutput</string>
+							<key>OutputUUID</key>
+							<string>A240A4D1-3432-587A-8765-AC6F97D2C9A9</string>
+						</dict>
+						<key>WFSerializationType</key>
+						<string>WFTextTokenAttachment</string>
+					</dict>
+				</dict>
+				<key>WFCondition</key>
+				<integer>0</integer>
+				<key>WFNumberValue</key>
+				<integer>1</integer>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.alert</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>WFAlertActionTitle</key>
+				<string>Presence</string>
+				<key>WFAlertActionMessage</key>
+				<string>优先级至少为 1。</string>
+				<key>WFAlertActionCancelButtonShown</key>
+				<false/>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.exit</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict/>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
+			<string>is.workflow.actions.conditional</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>WFControlFlowMode</key>
+				<integer>2</integer>
+				<key>GroupingIdentifier</key>
+				<string>381D5055-1879-57E3-A0B1-AB8B3ED828FC</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key>
 			<string>is.workflow.actions.dictionary</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
@@ -499,7 +640,17 @@
 									<key>Value</key>
 									<dict>
 										<key>string</key>
-										<string>2</string>
+										<string>￼</string>
+										<key>attachmentsByRange</key>
+										<dict>
+											<key>{0, 1}</key>
+											<dict>
+												<key>Type</key>
+												<string>ActionOutput</string>
+												<key>OutputUUID</key>
+												<string>A240A4D1-3432-587A-8765-AC6F97D2C9A9</string>
+											</dict>
+										</dict>
 									</dict>
 									<key>WFSerializationType</key>
 									<string>WFTextTokenString</string>

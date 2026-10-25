@@ -346,6 +346,15 @@ class DB:
             "UPDATE manual_states SET ended_at = expires_at WHERE ended_at IS NULL AND expires_at <= ?", (now,)
         )
 
+    def recover_outings(self) -> None:
+        """明确开始/结束的出游跨停机计时，过期的也按兜底时间结算。"""
+        self.conn.execute("""
+            UPDATE segments SET end = (
+                SELECT ended_at FROM manual_states WHERE manual_states.id = segments.id
+            )
+            WHERE category = 'out' AND id IN (SELECT id FROM manual_states WHERE state = 'out')
+        """)
+
     # -- media_cache
 
     def get_media(self, media_id: str) -> sqlite3.Row | None:

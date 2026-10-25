@@ -132,7 +132,15 @@ def state_workflow(title: str, state: str, comment: str) -> dict:
     name = "Presence · " + title
     actions = [action("comment", WFCommentActionText=comment)]
     values = {"state": state}
-    if state == "custom":
+    if state == "out":
+        actions += [action("ask", WFAskActionPrompt="这次出去玩做什么？例如：探索老城区、街头摄影、到处逛逛。可留空，文字会公开显示。",
+                           WFInputType="Text", WFAskActionDefaultAnswer="到处逛逛", UUID=uid("out-text")),
+                    action("text.replace", WFInput=text(ref("out-text")), WFReplaceTextFind=r"^\s+|\s+$",
+                           WFReplaceTextReplace="", WFReplaceTextRegularExpression=True, UUID=uid("out-trimmed")),
+                    action("count", Input=ref("out-trimmed"), WFCountType="Characters", UUID=uid("out-length"))]
+        actions += guard("long-out", ref("out-length"), 2, "描述最多为 120 个字符。", WFNumberValue=120)
+        values["text"] = ref("out-trimmed")
+    elif state == "custom":
         actions += [action("ask", WFAskActionPrompt="现在在做什么？这段文字会公开显示。",
                            WFInputType="Text", UUID=uid("custom-text")),
                     action("text.replace", WFInput=text(ref("custom-text")), WFReplaceTextFind=r"^\s+|\s+$",
@@ -148,14 +156,21 @@ def state_workflow(title: str, state: str, comment: str) -> dict:
         actions += guard("missing-minutes", ref("custom-minutes"), 101, "请输入有效的持续分钟数。")
         actions += guard("short-minutes", ref("custom-minutes"), 0, "持续时间至少为 1 分钟。", WFNumberValue=1)
         actions += guard("long-minutes", ref("custom-minutes"), 2, "持续时间最多为 1440 分钟。", WFNumberValue=1440)
-        values.update(text=ref("custom-trimmed"), minutes=ref("custom-minutes"), tier=2)
+        actions += [action("ask", WFAskActionPrompt="设置优先级：1 = 锚定状态（优先显示）；2、3… = 对应活动等级，数字越小越优先。",
+                           WFInputType="Number", WFAskActionDefaultAnswerNumber=2,
+                           WFAskActionAllowsDecimalNumbers=False, WFAskActionAllowsNegativeNumbers=False,
+                           UUID=uid("custom-tier"))]
+        actions += guard("missing-tier", ref("custom-tier"), 101, "请输入优先级：1 为锚定状态，2、3… 为活动等级。")
+        actions += guard("invalid-tier", ref("custom-tier"), 0, "优先级至少为 1。", WFNumberValue=1)
+        values.update(text=ref("custom-trimmed"), minutes=ref("custom-minutes"), tier=ref("custom-tier"))
     elif state == "eat":
         values["minutes"] = 60
     # Number 类型字段的动态变量也保留为 Number，避免把分钟数写成文字。
     fields = dictionary(values)
     if state == "custom":
-        next(item for item in fields["Value"]["WFDictionaryFieldValueItems"]
-             if item["WFKey"]["Value"]["string"] == "minutes")["WFItemType"] = 3
+        for item in fields["Value"]["WFDictionaryFieldValueItems"]:
+            if item["WFKey"]["Value"]["string"] in ("minutes", "tier"):
+                item["WFItemType"] = 3
     actions += [action("dictionary", WFItems=fields, UUID=uid(state + "/data")),
                 action("runworkflow", WFWorkflowName=REPORTER,
                        WFInput=ref(state + "/data"), WFShowWorkflow=False)]
@@ -171,7 +186,10 @@ def workflows() -> dict[str, dict]:
         ("停止吃饭", "stop_eat", "手动点按。只结束吃饭，保留办公室、睡觉、自定义等其他状态。需要服务器支持 stop_eat。"),
         ("到办公室", "office", "用于到达办公室的地点自动化。开启在办公室搞科研锚定，最长 12 小时。"),
         ("离开办公室", "leave_office", "用于离开办公室的地点自动化。只结束办公室锚定。"),
-        ("自定义状态", "custom", "手动输入公开状态和持续分钟数。默认等级 2；锚定状态仍优先。"),
+        ("出去玩", "out", "手动开始出游，填写可选的公开描述，结束办公室锚定。运行“结束出去玩”结束；24 小时兜底。重复开始会记录为新的一段。"),
+        ("结束出去玩", "stop_out", "只结束出去玩并保存时长；保留吃饭、睡觉、自定义等其他状态。可重复运行。需要服务器支持 stop_out。"),
+        ("自定义状态", "custom", "输入文字、持续分钟数和优先级。1 为优先显示的自定义锚定；2、3…为活动等级。到期或运行“退出自定义状态”结束。"),
+        ("退出自定义状态", "stop_custom", "只结束自定义状态（锚定或普通活动），保留上课、办公室、吃饭、睡觉和其他活动。可重复运行。"),
     ]:
         w = state_workflow(title, state, comment)
         result[w["WFWorkflowName"]] = w

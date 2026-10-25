@@ -25,7 +25,7 @@ class Timing:
     eat_min: float = 60  # 吃饭默认时长
     sleep_max_h: float = 14  # 睡觉最长时长
     wake_active_sec: float = 600  # Mac 连续活跃这么久视为已起床
-    out_min: float = 180  # “出门”默认有效期
+    out_min: float = 1440  # 出去玩手动结束，24 小时兜底
     custom_min: float = 120  # 自定义状态默认有效期
     office_max_h: float = 12  # “在办公室”最长时长（忘了结束时兜底）
 
@@ -125,7 +125,7 @@ class ManualState:
 MANUAL_SLOT = {"eat": "anchor", "sleep": "anchor", "office": "office", "out": "out", "custom": "custom"}
 ANCHOR_SLOTS = ("anchor", "office")
 # 开始一个手动状态时顺带结束的其他槽位：到办公室就不算出门，出门或睡觉就离开了办公室
-ENDS_SLOTS = {"office": ("out",), "out": ("office",), "sleep": ("office",)}
+ENDS_SLOTS = {"office": ("out",), "out": ("office",), "sleep": ("office", "out")}
 
 
 def public_host(host: str | None) -> bool:
@@ -621,6 +621,12 @@ class Engine:
         elif state == "leave_office":
             if m := self.manual.get("office"):
                 self.end_manual(m, ts)
+        elif state == "stop_out":
+            if m := self.manual.get("out"):
+                self.end_manual(m, min(ts, m.expires_at))
+        elif state == "stop_custom":
+            if m := self.manual.get("custom"):
+                self.end_manual(m, min(ts, m.expires_at))
         elif state in ("wake", "stop_eat"):
             m = self.manual.get("anchor")
             target = "sleep" if state == "wake" else "eat"
@@ -639,25 +645,33 @@ class Engine:
             else:
                 default = {"eat": t.eat_min, "out": t.out_min, "custom": t.custom_min}[state]
                 minutes = float(minutes) if minutes else default
+            if state == "out":
+                minutes = min(max(minutes, 1), 1440)
             tier = int(data["tier"]) if state == "custom" and data.get("tier") else None
-            m = ManualState(state, ts, ts + minutes * 60, text=data.get("text") or None, tier=tier)
+            text = data.get("text") or None
+            if state == "out" and isinstance(text, str):
+                text = text.strip() or None
+            m = ManualState(state, ts, ts + minutes * 60, text=text, tier=tier)
             self.start_manual(m, ts, source)
 
     def start_manual(self, m: ManualState, at: float, source: str | None = None) -> None:
         slot = MANUAL_SLOT[m.state]
         for s in (slot, *ENDS_SLOTS.get(m.state, ())):
             if old := self.manual.get(s):
-                self.end_manual(old, at)
-        line = ANCHOR if slot in ANCHOR_SLOTS else ACTIVITY
+                self.end_manual(old, min(at, old.expires_at))
+        line = ANCHOR if slot in ANCHOR_SLOTS or (m.state == "custom" and m.tier == 1) else ACTIVITY
         category = m.state
-        m.interval = self.open(line, category, max(at, self.started_at), source=source, detail=m.text)
+        # 出游由明确的开始/结束信号界定，停机期间仍在出游；固定 ID 让重启恢复同一片段。
+        start = m.start if m.state == "out" else max(at, self.started_at)
+        identity = {"id": m.id} if m.state == "out" else {}
+        m.interval = self.open(line, category, start, source=source, detail=m.text, **identity)
         if m.tier is not None:
             m.interval.tier = m.tier
         self.manual[slot] = m
         self._manual_dirty[m.id] = m
 
     def restore_manual(self, m: ManualState) -> None:
-        """服务器重启后恢复仍有效的手动状态；新片段从启动时开始。"""
+        """恢复有效手动状态；出游连续计时，其他状态从启动时开新片段。"""
         self.start_manual(m, self.started_at, None)
 
     def end_manual(self, m: ManualState, at: float) -> None:
@@ -741,9 +755,12 @@ class Engine:
             acts = [i for i in acts if i.category != "video"]
         for slot in ("out", "custom"):
             if m := self.manual.get(slot):
+                if m.state == "custom" and m.tier == 1:
+                    anchors.append(self._anchor_item("custom", m.start, None, text=m.text))
+                    continue
                 it = self.activity_item(m.state, m.start, values={"text": m.text})
                 if m.state == "out" and m.text:
-                    it.label = f"出门：{m.text}"
+                    it.label = f"出去玩 · {m.text}"
                 if m.tier is not None:
                     it.tier = m.tier
                 acts.append(it)

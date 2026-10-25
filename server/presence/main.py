@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from . import stats
 from .config import CONFIG_DIR, Settings
@@ -70,6 +70,22 @@ class SignalIn(BaseModel):
     ts: float | None = None
     ttl: float = Field(180, gt=0, le=86400)
     data: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_outing(self):
+        if self.kind == "manual" and self.data.get("state") == "custom" and "tier" in self.data:
+            tier = self.data["tier"]
+            if isinstance(tier, bool) or not isinstance(tier, (int, float)) or not 1 <= tier <= 2147483647 or tier % 1:
+                raise ValueError("自定义优先级须为正整数：1 为锚定，2、3…为活动等级")
+        if self.kind == "manual" and self.data.get("state") == "out":
+            text = self.data.get("text")
+            if text is not None and (not isinstance(text, str) or len(text.strip()) > 120):
+                raise ValueError("出游描述须为最多 120 字的文字")
+            if "minutes" in self.data:
+                minutes = self.data["minutes"]
+                if isinstance(minutes, bool) or not isinstance(minutes, (int, float)) or not 1 <= minutes <= 1440:
+                    raise ValueError("出游时长须为 1～1440 分钟")
+        return self
 
 
 class SignalBatch(BaseModel):
@@ -140,6 +156,7 @@ class Presence:
         if n:
             log.info("截止了 %d 个上次未结束的片段", n)
         self.db.end_stale_manual(now)
+        self.db.recover_outings()
         for m in self.db.active_manual(now):
             self.engine.restore_manual(m)
         self.engine.set_courses(self.db.load_courses(), now)

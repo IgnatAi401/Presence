@@ -13,7 +13,7 @@ const KICKER = {
   idle: "此刻",
 };
 const NAMES = {
-  class: "上课", eat: "吃饭", sleep: "睡觉", office: "办公室", research: "科研", dev: "开发", game: "游戏", out: "出门",
+  class: "上课", eat: "吃饭", sleep: "睡觉", office: "办公室", research: "科研", dev: "开发", game: "游戏", out: "出去玩",
   custom: "自定义", video: "看视频", browse: "上网", phone: "刷手机", music: "听歌",
 };
 
@@ -190,7 +190,7 @@ function renderMain(t) {
   const m = state.main;
   const screen = document.querySelector(".screen");
   screen.style.setProperty("--hue", m.type === "idle" ? "var(--dim)" : hue(m.category));
-  $("kicker").textContent = m.type === "idle" ? (m.category === "offline" ? "OFFLINE" : "AWAY") : KICKER[m.type];
+  $("kicker").textContent = m.category === "out" ? "出门走走" : m.type === "idle" ? (m.category === "offline" ? "OFFLINE" : "AWAY") : KICKER[m.type];
   const label = $("main-label");
   label.replaceChildren(...[phoneIcon(m, "main"), m.label].filter((child) => child != null));
   label.title = m.label; // 超过两行时被截断，悬停看全文

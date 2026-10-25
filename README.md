@@ -7,7 +7,7 @@
 | `server/` | FastAPI 后端（uv 管理）：信号接收、状态引擎、SQLite、公开接口、SSE 推送 |
 | `web/` | now.ignat.ai 静态站（Cloudflare Worker `presence-web`，pnpm 管理 wrangler） |
 | `agents/mac/` | Mac 菜单栏小工具（Swift，见其 README） |
-| `shortcuts/` | iPhone 快捷指令：睡觉、起床、吃饭、办公室和自定义状态，见[安装说明](shortcuts/README.md) |
+| `shortcuts/` | iPhone 快捷指令：睡觉、起床、吃饭、办公室、出去玩和自定义状态，见[安装说明](shortcuts/README.md) |
 
 ## 服务器
 

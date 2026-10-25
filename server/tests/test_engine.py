@@ -289,11 +289,26 @@ def test_eat_expires_and_sleep_replaces_eat():
 
 
 def test_out_is_main_without_anchor_but_side_in_class():
-    sim = Sim().manual(0, "out", text="出去玩")
+    sim = Sim().manual(0, "out", text="探索老城区")
     s = sim.snap(10)
-    assert s.main.category == "out" and s.main.label == "出门：出去玩"
+    assert s.main.category == "out" and s.main.label == "出去玩 · 探索老城区"
     sim.e.set_courses([course(0, 3000)], T0 + 20)
     assert cats(sim.snap(30)) == ("class", ["out"])
+
+
+def test_outing_expiry_and_context():
+    sim = Sim().manual(0, "out", text="街头摄影")
+    assert sim.snap(4 * 3600).main.category == "out"  # 超过旧的 3 小时仍在出游
+    sim.manual(15000, "eat").manual(15100, "stop_eat")
+    assert sim.snap(15101).main.category == "out"
+    sim.manual(15200, "custom", text="看书").manual(15300, "stop_out")
+    assert cats(sim.snap(15301)) == ("custom", [])
+    assert sim.segments("out")[0].end == T0 + 15300
+    sim.manual(15400, "out").manual(15500, "sleep")
+    assert "out" not in [sim.snap(15501).main.category, *[i.category for i in sim.snap(15501).side]]
+    sim.manual(16000, "out").tick(16000 + 86401)
+    assert "out" not in sim.e.manual
+    assert sim.segments("out")[-1].end == T0 + 16000 + 86400
 
 
 def test_cancel_class():
@@ -305,9 +320,9 @@ def test_cancel_class():
 
 
 def test_clear_ends_manual_states():
-    sim = Sim().manual(0, "sleep").manual(10, "custom", text="写作业", tier=1)
+    sim = Sim().manual(0, "sleep").manual(10, "custom", text="写作业", tier=2)
     s = sim.snap(20)
-    assert s.main.category == "sleep" and s.side[0].label == "写作业" and s.side[0].tier == 1
+    assert s.main.category == "sleep" and s.side[0].label == "写作业" and s.side[0].tier == 2
     sim.manual(30, "clear")
     assert sim.snap(40).main.category != "sleep"
     assert not sim.e.manual
@@ -638,3 +653,29 @@ def test_music_without_title_not_logged():
     e = (sim := Sim()).e
     e.ingest("mac", "music", T0, 300, {"player": "apple_music", "title": "", "state": "playing"})
     assert "media" not in sim.segments("music")[0].meta
+
+
+def test_custom_anchor_preserves_anchors_and_stops_independently():
+    sim = Sim().manual(0, 'office').manual(10, 'eat')
+    sim.e.set_courses([course(0, 3000)], T0 + 10)
+    sim.manual(20, 'custom', text='专注写作', tier=1)
+    s = sim.snap(30)
+    assert (s.main.type, s.main.category, s.main.label) == ('anchor', 'custom', '专注写作')
+    assert [i.category for i in s.side] == ['class', 'eat', 'office']
+    sim.manual(40, 'stop_custom').manual(45, 'stop_custom')
+    assert cats(sim.snap(46)) == ('class', ['eat', 'office'])
+    assert sim.segments('custom')[0].line == 'anchor'
+    assert sim.segments('custom')[0].end == T0 + 40
+
+
+def test_custom_changes_between_anchor_activity_and_expires():
+    sim = Sim().manual(0, 'office').manual(10, 'custom', text='聊天', tier=3)
+    assert cats(sim.snap(11)) == ('office', ['custom'])
+    assert sim.snap(12).side[0].tier == 3
+    sim.manual(20, 'custom', text='排练', tier=1, minutes=1)
+    assert cats(sim.snap(21)) == ('custom', ['office'])
+    assert cats(sim.snap(81)) == ('office', [])
+    sim.manual(90, 'custom', text='休息', tier=4)
+    assert sim.snap(91).side[0].tier == 4
+    sim.manual(100, 'stop_custom')
+    assert cats(sim.snap(101)) == ('office', [])

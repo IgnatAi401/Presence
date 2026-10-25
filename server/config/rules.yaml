@@ -1,7 +1,8 @@
 # 分类规则与等级（改完重启服务器即可生效，各设备上的小工具不用更新）
 
-# 锚定状态：rank 越小越优先（上课 > 吃饭 / 睡觉 > 办公室）
+# 锚定状态：rank 越小越优先（自定义锚定 > 上课 > 吃饭 / 睡觉 > 办公室）
 anchors:
+  custom: { rank: 0, short: "自定义", label: "{text}" }
   class: { rank: 1, short: "上课", label: "正在上《{course}》" }
   eat: { rank: 2, short: "吃饭", label: "吃饭中" }
   sleep: { rank: 2, short: "睡觉", label: "睡觉中" }
@@ -16,7 +17,7 @@ activities:
   research: { tier: 1, short: "科研", label: "搞科研", keep_min: 10, serious: true, show_project: true }
   dev: { tier: 1, short: "开发", label: "搞开发", keep_min: 10, serious: true, show_project: true }
   game: { tier: 2, short: "游戏", label: "玩《{name}》", keep_min: 3 }
-  out: { tier: 2, short: "出门", label: "出门" }
+  out: { tier: 2, short: "出去玩", label: "出去玩" }
   custom: { tier: 2, short: "自定义", label: "{text}" }
   video: { tier: 3, short: "看视频", label: "看视频", keep_min: 1 }
   browse: { tier: 3, short: "上网", label: "网上冲浪", keep_min: 1 }
