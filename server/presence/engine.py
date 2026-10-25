@@ -440,7 +440,9 @@ def _feed_spec(kind: str, data: dict) -> tuple[str, bool, tuple] | None:
     if kind == "music":
         return "music", data.get("state") == "playing", (data.get("title"), data.get("artist"))
     if kind == "video":
-        return "video", data.get("state") == "playing", (data.get("site"), data.get("id"), data.get("page"))
+        # 暂停着（看完了）但在看评论区，也算还在看
+        active = data.get("state") == "playing" or data.get("viewing") == "comments"
+        return "video", active, (data.get("site"), data.get("id"), data.get("page"))
     if kind == "game":
         return "game", data.get("event", "start") != "stop", (data.get("exe") or data.get("name"),)
     if kind == "phone_app":
@@ -773,11 +775,14 @@ class Engine:
             card["session_since"] = f.session  # 连续听歌的起点
             return self.activity_item("music", f.since, values={"title": d.get("title")}, card=card)
         if f.category == "video":
-            card = {k: d.get(k) for k in ("site", "id", "page", "state", "position", "duration", "rate")}
+            card = {k: d.get(k) for k in ("site", "id", "page", "state", "position", "duration", "rate", "viewing")}
             card["updated_at"] = f.data_ts
             card["session_since"] = f.session  # 连续看视频的起点：换视频、余温内继续都接着算
             name = {"bilibili": "B站", "youtube": "YouTube"}.get(d.get("site") or "")
-            return self.activity_item("video", f.since, values={"name": name}, card=card)
+            it = self.activity_item("video", f.since, values={"name": name}, card=card)
+            if d.get("viewing") == "comments":
+                it.label = "在看评论"  # 视频滚出画面了，卡片里仍显示是哪个视频
+            return it
         if f.category == "game":
             card = {"name": d.get("name"), "appid": d.get("appid"), "since": f.since}
             return self.activity_item("game", f.since, values={"name": d.get("name") or d.get("exe")}, card=card)

@@ -29,6 +29,7 @@ final class AgentModel: ObservableObject {
     private var policy = ReportPolicy()
     private var musicPolicy = MusicPolicy()
     private var videoPolicy = PlaybackPolicy<VideoState>()
+    private var viewingDebounce = ViewingDebounce()
     /// 当前曲目的封面：读一次就缓存；没读到时过一会儿再试（在线曲目的封面可能还没下载好）
     private var cover: (trackId: String, at: Date, data: Data?, sha256: String?)?
     private var uploadedCovers: Set<String> = []
@@ -212,6 +213,7 @@ final class AgentModel: ObservableObject {
         case .none:
             break // 没有视频页：沿用上次的判断，打开视频页时再确认
         }
+        state = viewingDebounce.apply(state)
         video = state
         let now = Date().timeIntervalSince1970
         if let signal = videoPolicy.signal(for: state, now: now, heartbeatSec: config.heartbeatSec, ttl: config.ttlSec) {
@@ -321,6 +323,7 @@ final class AgentModel: ObservableObject {
         policy.reset()
         musicPolicy.reset()
         videoPolicy.reset()
+        viewingDebounce.reset()
         sample()
         sampleMusic()
         sampleVideo()
@@ -337,6 +340,7 @@ final class AgentModel: ObservableObject {
         policy.reset()
         musicPolicy.reset()
         videoPolicy.reset()
+        viewingDebounce.reset()
         coverRetryAt = .distantPast
         Task { await reporter.update(config: next) }
         restartTimer()
@@ -368,7 +372,8 @@ final class AgentModel: ObservableObject {
         let site = v.ref.site == "bilibili" ? "B站" : "YouTube"
         let speed = v.rate == 1 ? "" : " · \(v.rate.formatted())×"
         let name = v.title.isEmpty ? v.ref.id : v.title
-        return "\(v.playing ? "正在看" : "已暂停")（\(site)）：\(name)\(speed)"
+        let comments = v.viewing == .comments ? " · 在看评论" : ""
+        return "\(v.playing ? "正在看" : "已暂停")（\(site)）：\(name)\(speed)\(comments)"
     }
 
     var reportLine: String {

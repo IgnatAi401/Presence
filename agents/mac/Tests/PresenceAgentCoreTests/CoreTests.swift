@@ -305,6 +305,46 @@ import Testing
         #expect(live.state?.duration == 0)
     }
 
+    @Test func probeReadsComments() {
+        let tab = VideoTab(url: "https://www.bilibili.com/video/BV1", title: "t", probe: "0,600,600,1,1", front: true)
+        #expect(tab.state?.viewing == .comments)
+        #expect(tab.state?.active == true) // 看完了在看评论，仍算在看
+        var back = tab
+        back.front = false // 后台标签页的滚动位置不算
+        #expect(back.state?.viewing == .video)
+        var top = tab
+        top.probe = "1,10,600,1,0"
+        #expect(top.state?.viewing == .video)
+        #expect(tab.state?.signal(ts: 0, ttl: 300).data["viewing"] == .string("comments"))
+        #expect(top.state?.signal(ts: 0, ttl: 300).data["viewing"] == nil)
+    }
+
+    @Test func viewingNeedsTwoSamples() {
+        var d = ViewingDebounce()
+        var v = VideoState(ref: VideoRef(site: "bilibili", id: "BV1"), playing: false, viewing: .comments)
+        #expect(d.apply(v)?.viewing == .video) // 第一次只记下
+        #expect(d.apply(v)?.viewing == .comments) // 连续两次才切换
+        v.viewing = .video
+        #expect(d.apply(v)?.viewing == .comments) // 滚回去一下不马上变
+        v.viewing = .comments
+        #expect(d.apply(v)?.viewing == .comments)
+        v.ref.id = "BV2" // 换视频从头开始
+        #expect(d.apply(v)?.viewing == .video)
+        #expect(d.apply(nil) == nil)
+    }
+
+    @Test func policyKeepsCommentsAlive() {
+        var p = PlaybackPolicy<VideoState>()
+        var v = VideoState(ref: VideoRef(site: "bilibili", id: "BV1"), duration: 600, position: 600, playing: false)
+        #expect(p.signal(for: v, now: 0, heartbeatSec: 120, ttl: 300) != nil)
+        v.viewing = .comments // 切到评论区立即发
+        #expect(p.signal(for: v, now: 5, heartbeatSec: 120, ttl: 300)?.data["viewing"] == .string("comments"))
+        #expect(p.signal(for: v, now: 130, heartbeatSec: 120, ttl: 300) != nil) // 暂停着看评论也有心跳
+        let end = p.signal(for: nil, now: 140, heartbeatSec: 120, ttl: 300) // 关掉页面补一条结束
+        #expect(end?.data["state"] == .string("paused") && end?.data["viewing"] == nil)
+        #expect(end?.data["position"] == .number(600))
+    }
+
     @Test func pickPrefersPlaying() {
         func tab(_ id: String, playing: Bool, front: Bool) -> VideoTab {
             VideoTab(url: "https://www.bilibili.com/video/\(id)", title: id, probe: "\(playing ? 1 : 0),1,100,1",

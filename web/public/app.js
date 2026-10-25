@@ -56,14 +56,17 @@ function dur(sec) {
 const clock = (ts) =>
   new Date(ts * 1000).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 
-// 连续进行的时长：听歌、看视频跨换歌 / 换视频累计；暂停时停在暂停那一刻
+// 看完了在看评论区：视频暂停着，但人还在
+const readingComments = (card) => card?.viewing === "comments";
+
+// 连续进行的时长：听歌、看视频跨换歌 / 换视频累计；暂停时停在暂停那一刻（在看评论时接着走）
 function sessionSec(card, t) {
-  const end = card.state === "playing" ? t : card.updated_at || t;
+  const end = card.state === "playing" || readingComments(card) ? t : card.updated_at || t;
   return end - card.session_since;
 }
 
 function metaText(item, t) {
-  const parts = [];
+  const parts = item.detail ? [item.detail] : []; // 工作区名放最前面
   if (item.type === "anchor" && item.category === "class" && item.until) {
     parts.push(`还剩 ${dur(item.until - t)}`);
   } else if (item.category === "video" && item.card?.session_since) {
@@ -71,7 +74,6 @@ function metaText(item, t) {
   } else if (item.since && !item.card?.session_since) {
     parts.push(`已持续 ${dur(t - item.since)}`);
   }
-  if (item.detail) parts.push(item.detail);
   if (item.today_sec != null) {
     // 合并了活动的锚定状态（在办公室搞科研）：已持续是在办公室的时长，今日时长是科研的
     const what = item.activity ? `今日${NAMES[item.activity] || ""}` : "今日已";
@@ -136,7 +138,8 @@ function renderCard(item, t) {
     // 服务器还没查到标题时只有进度条
     title = c.title || item.label;
     const speed = c.rate && c.rate !== 1 ? `${c.rate}×` : null;
-    sub = [c.owner || VIDEO_SITES[c.site], speed, c.state === "paused" ? "已暂停" : null].filter(Boolean).join(" · ");
+    const status = readingComments(c) ? "在看评论" : c.state === "paused" ? "已暂停" : null;
+    sub = [c.owner || VIDEO_SITES[c.site], speed, status].filter(Boolean).join(" · ");
     href = c.url || null;
   } else if (item.category === "game") {
     title = c.name || item.label;
@@ -184,12 +187,12 @@ function renderSide(t) {
     const card = renderCard(item, t);
     const sub = [];
     if (item.slacking) sub.push(`🐟 摸鱼中 ${dur(t - item.slacking.since)}`);
-    else if (item.card?.state === "paused") sub.push("已暂停");
+    else if (item.card?.state === "paused" && !readingComments(item.card)) sub.push("已暂停");
     else if (item.category === "video" && item.card?.session_since) sub.push(dur(sessionSec(item.card, t)));
     else if (item.since && !item.card?.session_since) sub.push(dur(t - item.since));
     // 有卡片时歌名、游戏名在卡片里，上面这行只写类别
     const text = card ? CARD_ROW[item.category] || item.label
-      : item.detail ? `${item.label} · ${item.detail}` : item.label;
+      : item.detail ? `${item.detail} · ${item.label}` : item.label;
     return h("li", { class: card ? "has-card" : null, "--hue": hue(item.category) },
       h("span", { class: "lbl", title: text }, text),
       sub.length ? h("span", { class: "sub" }, sub.join(" · ")) : null,

@@ -502,6 +502,21 @@ def test_video_feed_hides_domain_video_from_same_mac():
     assert sorted(i.card["id"] for i in s.side) == ["BV1", "x"]  # 别的设备的视频照常显示
 
 
+def test_reading_comments_after_video_keeps_card():
+    sim = Sim().mac(0, safari("www.bilibili.com"))
+    v = {"site": "bilibili", "id": "BV1", "position": 600, "duration": 600}
+    sim.e.ingest("mac", "video", T0 + 10, 3600, {**v, "state": "playing", "position": 0})
+    sim.e.ingest("mac", "video", T0 + 610, 300, {**v, "state": "paused"})  # 看完了
+    sim.e.ingest("mac", "video", T0 + 620, 300, {**v, "state": "paused", "viewing": "comments"})
+    s = sim.snap(800)  # 暂停后的 1 分钟余温早过了，在看评论仍算在看
+    assert cats(s) == ("video", []) and s.main.label == "在看评论"
+    assert s.main.card["viewing"] == "comments" and s.main.card["session_since"] == T0  # 从打开网站算起，没断
+    sim.e.ingest("mac", "video", T0 + 900, 300, {**v, "state": "paused"})  # 滚回视频、关页面
+    assert sim.segments("video")[-1].end == T0 + 900
+    plays = {iv.meta["media"]["play"] for iv in sim.segments("video") if "media" in iv.meta}
+    assert len(plays) == 1  # 看完接着看评论，算同一次观看
+
+
 def test_domain_video_shown_without_video_feed():
     s = Sim().mac(0, safari("www.bilibili.com")).snap(5)
     assert cats(s) == ("video", []) and s.main.card["kind"] == "web"

@@ -115,13 +115,17 @@ enum SystemProbe {
         !NSRunningApplication.runningApplications(withBundleIdentifier: safariBundleId).isEmpty
     }
 
-    // 在所有视频页标签页里执行一小段脚本，读 <video> 的播放 / 暂停、进度、时长、倍速。
+    // 在所有视频页标签页里执行一小段脚本，读 <video> 的播放 / 暂停、进度、时长、倍速，以及是否在看评论区：
+    // 页面往下滚过、视频露出不到三成（或 B站缩成了右下角小窗）就算在看评论；全屏、标签页不在前台时不算。
     // 需要 Safari“开发”菜单里的“允许来自 Apple 事件的 JavaScript”；没开时 do JavaScript 报错，返回 "!"。
     // 页面卡住时最多等 2 秒，不拖住菜单栏。
     private static let videoScript = NSAppleScript(source: """
     set js to "(function(){var vs=[].slice.call(document.querySelectorAll('video'));if(!vs.length)return '';\
     var v=vs.filter(function(x){return !x.paused})[0]||vs.sort(function(a,b){return (b.duration||0)-(a.duration||0)})[0];\
-    return [v.paused?0:1,v.currentTime,isFinite(v.duration)?v.duration:0,v.playbackRate].join(',');})()"
+    var c=0;if(document.visibilityState==='visible'&&scrollY>0&&!document.fullscreenElement&&!document.webkitFullscreenElement){\
+    var r=v.getBoundingClientRect(),seen=r.height>0?Math.max(0,Math.min(r.bottom,innerHeight)-Math.max(r.top,0))/r.height:0;\
+    if(seen<0.3||document.querySelector('.bpx-player-container[data-screen=mini]'))c=1;}\
+    return [v.paused?0:1,v.currentTime,isFinite(v.duration)?v.duration:0,v.playbackRate,c].join(',');})()"
     tell application id "com.apple.Safari"
         set out to {}
         set wi to 0
