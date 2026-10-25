@@ -414,6 +414,16 @@ def test_music_from_two_players_coexist():
     assert len(s.side) == 1 and {s.main.card["player"], s.side[0].card["player"]} == {"aimp", "apple_music"}
 
 
+def test_two_players_on_one_device_do_not_replace_each_other():
+    e = (sim := Sim()).e
+    for i in range(3):  # 两个播放器交替上报
+        e.ingest("mac", "music", T0 + i * 20, 300, {"player": "apple_music", "title": "A", "state": "playing"})
+        e.ingest("mac", "music", T0 + i * 20 + 10, 300, {"player": "aimp", "title": "B", "state": "playing"})
+    s = sim.snap(70)
+    assert sorted(c["player"] for c in [s.main.card, *(i.card for i in s.side)]) == ["aimp", "apple_music"]
+    assert len(sim.segments("music")) == 2  # 没有因为来回切换而切出一堆片段
+
+
 def test_game_lingers_three_minutes():
     e = (sim := Sim()).e
     e.ingest("windows", "game", T0, 3600, {"name": "Hades", "event": "start"})

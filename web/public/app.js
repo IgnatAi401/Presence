@@ -98,12 +98,25 @@ const mmss = (sec) => {
 // 右上角标签大约多宽（12px 等宽字体：英文数字约 0.6em，中文 1em），给标题留出位置
 const badgeWidth = (text) => Math.ceil([...text].reduce((w, ch) => w + (ch.charCodeAt(0) > 255 ? 12 : 7.2), 0)) + 16;
 
+// 每秒重画时复用同一个封面节点：新建的图片要重新解码，会一闪一闪
+const covers = new Map();
+function coverNode(url, player) {
+  const key = `${url || ""}|${player || ""}`;
+  let el = covers.get(key);
+  if (!el) {
+    el = h("div", { class: "cover", style: url ? { backgroundImage: `url("${encodeURI(mediaUrl(url))}")` } : {} },
+      player ? h("img", { class: `player ${player}`, src: `/icons/${player.replace("_", "-")}.svg`, alt: PLAYERS[player], title: PLAYERS[player] }) : null);
+    covers.set(key, el);
+    if (covers.size > 50) covers.delete(covers.keys().next().value); // 只留最近建的 50 个
+  }
+  return el;
+}
+
 function renderCard(item, t) {
   const c = item.card;
   if (!c) return null;
   const player = item.category === "music" ? PLAYERS[c.player] : null;
-  const cover = h("div", { class: "cover", style: c.cover ? { backgroundImage: `url("${encodeURI(mediaUrl(c.cover))}")` } : {} },
-    player ? h("img", { class: `player ${c.player}`, src: `/icons/${c.player.replace("_", "-")}.svg`, alt: player, title: player }) : null);
+  const cover = coverNode(c.cover, player && c.player);
   let title = item.label;
   let sub = "";
   let href = null;

@@ -517,6 +517,8 @@ class Engine:
         key = f"{kind}:{source}"
         if kind in ("game", "phone_app"):
             key += f":{identity[0]}"
+        elif kind == "music" and data.get("player"):
+            key += f":{data['player']}"  # 同一台设备上的两个播放器也各算各的，不互相顶掉
         if kind == "phone_app" and active:
             # 手机同一时刻只有一个前台 App
             for k, f in list(self.feeds.items()):
