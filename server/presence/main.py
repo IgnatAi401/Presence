@@ -7,24 +7,29 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import hmac
 import json
 import logging
+import os
+import re
 import time
 from collections import deque
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import stats
 from .config import CONFIG_DIR, Settings
 from .db import DB
-from .engine import Engine, Snapshot
+from .engine import Engine, Snapshot, public_host
 from .rules import Rules
+from .sources import video, web
 from .sources.calendar import CalendarUnavailable, fetch_courses
 
 log = logging.getLogger("presence")
@@ -33,6 +38,28 @@ PREFIX = "/presence/api"
 TICK_SEC = 2  # 状态推进间隔：决定切换防抖、余温到期多快反映到页面
 SSE_PING_SEC = 25
 SIGNAL_KEEP_DAYS = 30
+MEDIA_ID = re.compile(r"[0-9a-f]{64}")
+MEDIA_EXT = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/svg+xml": "svg"}
+# 图片接口的安全响应头：SVG 里即使带了脚本，直接打开图片地址时也不会执行
+MEDIA_HEADERS = {
+    "Cache-Control": "public, max-age=31536000, immutable",  # 文件名就是内容的哈希，永远不会变
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+    "X-Content-Type-Options": "nosniff",
+}
+VIDEO_META_RETRY_SEC = 3600  # 视频信息没查到时，过这么久再查
+SITE_ICON_RETRY_SEC = 86400  # 网站图标没取到时，过这么久再取
+DOMAIN = re.compile(r"[a-z0-9.-]{1,253}")
+
+
+def sniff_image(data: bytes) -> str | None:
+    """按文件头判断图片类型，只认 JPEG / PNG / WebP；不信任客户端的 Content-Type。"""
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
 
 
 class SignalIn(BaseModel):
@@ -83,6 +110,16 @@ class Presence:
         self.hub = Hub(settings.max_streams)
         self.rate: dict[str, deque[float]] = {}
         self.last_payload = ""
+        # 视频信息：(site, id) → 数据库里的一行；查询函数可替换，测试时不联网
+        self.video_meta: dict[tuple[str, str], Any] = {}
+        self.video_fetching: set[tuple[str, str]] = set()
+        self.fetch_video_meta: Callable[[str, str], video.VideoMeta | None] = video.fetch_meta
+        self.fetch_cover: Callable[[str, int], bytes | None] = video.fetch_cover
+        # 网站图标：域名 → 数据库里的一行
+        self.site_icons: dict[str, Any] = {}
+        self.icon_fetching: set[str] = set()
+        self.fetch_icon: Callable[[str, int], web.Icon | None] = web.fetch_icon
+        self.tasks: set[asyncio.Task] = set()
 
         last = self.db.last_signal_ts()
         n = self.db.close_dangling(last if last is not None else now)
@@ -121,8 +158,140 @@ class Presence:
         self.db.insert_signals(rows, now)
         for src, kind, ts, ttl, data in rows:
             self.engine.ingest(src, kind, ts, ttl, data)
+            if kind == "video" and isinstance(data.get("site"), str) and isinstance(data.get("id"), str):
+                self.want_video_meta(data["site"], data["id"])
+            if kind == "desktop" and isinstance(data.get("domain"), str) and public_host(data["domain"].lower()):
+                self.want_site_icon(data["domain"].lower())
         self.update(now)
         return len(rows)
+
+    # -- 视频信息
+
+    def cached_video_meta(self, site: str, vid: str) -> Any:
+        key = (site, vid)
+        if key not in self.video_meta:
+            self.video_meta[key] = self.db.get_video_meta(site, vid)
+        return self.video_meta[key]
+
+    def want_video_meta(self, site: str, vid: str) -> None:
+        """还没查过（或上次没查到且已过重试间隔）就在后台查一次，查到后推送新状态。"""
+        key = (site, vid)
+        row = self.cached_video_meta(site, vid)
+        if key in self.video_fetching or site not in ("bilibili", "youtube") or len(vid) > 40:
+            return
+        if row is not None and (row["title"] is not None or self.clock() - row["fetched_at"] < VIDEO_META_RETRY_SEC):
+            return
+        self.video_fetching.add(key)
+        self.spawn(self.load_video_meta(site, vid))
+
+    def spawn(self, coro) -> None:
+        task = asyncio.get_running_loop().create_task(coro)
+        self.tasks.add(task)
+        task.add_done_callback(self.tasks.discard)
+
+    def save_fetched_image(self, data: bytes | None, source: str, origin_url: str | None = None,
+                           mime: str | None = None) -> str | None:
+        """把抓到的图片存进封面缓存，返回 sha256；不是图片时返回 None。mime 只在调用方已经检查过内容时传入。"""
+        mime = mime or (sniff_image(data) if data else None)
+        if not data or not mime:
+            return None
+        h = hashlib.sha256(data).hexdigest()
+        self.save_media(h, data, mime, source, origin_url=origin_url)
+        return h
+
+    async def load_video_meta(self, site: str, vid: str) -> None:
+        try:
+            meta = await asyncio.to_thread(self.fetch_video_meta, site, vid)
+            cover_hash = None
+            if meta and meta.cover_url:
+                data = await asyncio.to_thread(self.fetch_cover, meta.cover_url, self.settings.media_max_bytes)
+                cover_hash = self.save_fetched_image(data, site, meta.cover_url)
+            now = self.clock()
+            if meta:
+                self.db.save_video_meta(site, vid, now, meta.title, meta.owner, meta.url, cover_hash, meta.parts)
+                log.info("视频信息：%s/%s %s", site, vid, meta.title)
+            else:
+                self.db.save_video_meta(site, vid, now)
+            self.video_meta.pop((site, vid), None)
+            self.update(now)
+        except Exception:
+            log.exception("保存视频信息出错 %s/%s", site, vid)
+        finally:
+            self.video_fetching.discard((site, vid))
+
+    # -- 网站图标
+
+    def cached_site_icon(self, domain: str) -> Any:
+        if domain not in self.site_icons:
+            self.site_icons[domain] = self.db.get_site_icon(domain)
+        return self.site_icons[domain]
+
+    def want_site_icon(self, domain: str) -> None:
+        if domain in self.icon_fetching or not DOMAIN.fullmatch(domain):
+            return
+        row = self.cached_site_icon(domain)
+        if row is not None and (row["cover_hash"] or self.clock() - row["fetched_at"] < SITE_ICON_RETRY_SEC):
+            return
+        self.icon_fetching.add(domain)
+        self.spawn(self.load_site_icon(domain))
+
+    async def load_site_icon(self, domain: str) -> None:
+        try:
+            icon = await asyncio.to_thread(self.fetch_icon, domain, self.settings.media_max_bytes)
+            now = self.clock()
+            h = self.save_fetched_image(icon.data, "icon", icon.url, icon.mime) if icon else None
+            self.db.save_site_icon(domain, h, now)
+            self.site_icons.pop(domain, None)
+            self.update(now)
+        except Exception:
+            log.exception("保存网站图标出错 %s", domain)
+        finally:
+            self.icon_fetching.discard(domain)
+
+    def web_card(self, card: dict[str, Any]) -> None:
+        domain = card.get("domain")
+        row = self.cached_site_icon(domain) if isinstance(domain, str) else None
+        if row is not None and row["cover_hash"]:
+            card["cover_hash"] = row["cover_hash"]
+
+    def video_card(self, card: dict[str, Any]) -> None:
+        """视频卡片补上标题、UP 主、链接和封面；还没查到时只有进度。"""
+        site, vid = card.get("site"), card.get("id")
+        row = self.cached_video_meta(site, vid) if isinstance(site, str) and isinstance(vid, str) else None
+        if row is None or row["title"] is None:
+            return
+        title, url, page = row["title"], row["url"], card.get("page")
+        parts = json.loads(row["parts_json"])
+        if isinstance(page, (int, float)) and page >= 2:
+            page = int(page)
+            url += f"?p={page}"
+            if len(parts) >= page and parts[page - 1] and parts[page - 1] != title:
+                title += f" · P{page} {parts[page - 1]}"
+        card.update(title=title, owner=row["owner"], url=url)
+        if row["cover_hash"]:
+            card["cover_hash"] = row["cover_hash"]
+
+    # -- 封面
+
+    def media_file(self, media_id: str) -> tuple[Path, str] | None:
+        row = self.db.get_media(media_id)
+        if row is None:
+            return None
+        path = self.settings.media_dir / row["path"]
+        return (path, row["mime"]) if path.is_file() else None
+
+    def save_media(self, media_id: str, data: bytes, mime: str, source: str, origin_url: str | None = None) -> bool:
+        """保存一张图片；已经有了返回 False。先写临时文件再改名，避免留下半截文件。"""
+        if self.media_file(media_id):
+            return False
+        d = self.settings.media_dir
+        d.mkdir(parents=True, exist_ok=True)
+        name = f"{media_id}.{MEDIA_EXT[mime]}"
+        tmp = d / f".{name}.tmp"
+        tmp.write_bytes(data)
+        os.replace(tmp, d / name)
+        self.db.add_media(media_id, mime, name, len(data), source, self.clock(), origin_url)
+        return True
 
     # -- 状态
 
@@ -151,6 +320,10 @@ class Presence:
                     i["today_sec"] = totals[cat]
         for i in items:
             card = i.get("card")
+            if card and card.get("kind") == "web":
+                self.web_card(card)
+            elif card and i["category"] == "video":
+                self.video_card(card)
             if card and "cover_hash" in card:
                 h = card.pop("cover_hash")
                 if h:
@@ -225,7 +398,7 @@ def create_app(
         try:
             yield
         finally:
-            for t in tasks:
+            for t in [*tasks, *p.tasks]:
                 t.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await t
@@ -253,8 +426,8 @@ def create_app(
         resp.headers.setdefault("Vary", "Origin")
         return resp
 
-    @api.post("/signal")
-    async def signal(request: Request, body: SignalBatch | SignalIn):
+    def device(request: Request) -> str:
+        """检查设备令牌和频率限制，返回设备名（即信号来源）。"""
         p = state["p"]
         auth = request.headers.get("authorization", "")
         token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
@@ -263,8 +436,44 @@ def create_app(
             raise HTTPException(401, "设备令牌无效")
         if not p.allow(source, p.clock()):
             raise HTTPException(429, "上报太频繁")
+        return source
+
+    @api.post("/signal")
+    async def signal(request: Request, body: SignalBatch | SignalIn):
+        source = device(request)
         signals = body.signals if isinstance(body, SignalBatch) else [body]
-        return {"ok": True, "accepted": p.handle(source, signals)}
+        return {"ok": True, "accepted": state["p"].handle(source, signals)}
+
+    @api.put("/media/{media_id}")
+    async def put_media(media_id: str, request: Request):
+        source = device(request)
+        p = state["p"]
+        if not MEDIA_ID.fullmatch(media_id):
+            raise HTTPException(400, "地址里应是 64 位小写十六进制的 sha256")
+        limit = p.settings.media_max_bytes
+        if int(request.headers.get("content-length") or 0) > limit:
+            raise HTTPException(413, f"图片不能超过 {limit} 字节")
+        buf = bytearray()
+        async for chunk in request.stream():
+            buf += chunk
+            if len(buf) > limit:
+                raise HTTPException(413, f"图片不能超过 {limit} 字节")
+        data = bytes(buf)
+        mime = sniff_image(data)
+        if mime is None:
+            raise HTTPException(415, "只接受 JPEG、PNG、WebP 图片")
+        if hashlib.sha256(data).hexdigest() != media_id:
+            raise HTTPException(400, "sha256 与内容不一致")
+        created = p.save_media(media_id, data, mime, source)
+        return JSONResponse({"ok": True, "created": created}, status_code=201 if created else 200)
+
+    @api.api_route("/media/{media_id}", methods=["GET", "HEAD"])
+    async def get_media(media_id: str):
+        found = state["p"].media_file(media_id) if MEDIA_ID.fullmatch(media_id) else None
+        if found is None:
+            raise HTTPException(404, "没有这张图片", headers={"Cache-Control": "no-store"})
+        path, mime = found
+        return FileResponse(path, media_type=mime, headers=MEDIA_HEADERS)
 
     @api.get("/now")
     async def now():

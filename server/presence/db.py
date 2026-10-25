@@ -62,6 +62,39 @@ MIGRATIONS = [
         value TEXT
     );
     """,
+    """
+    CREATE TABLE media_cache (
+        id TEXT PRIMARY KEY,             -- 图片内容的 sha256（十六进制小写）
+        mime TEXT NOT NULL,
+        path TEXT NOT NULL,              -- 相对媒体目录的文件名
+        origin_url TEXT,                 -- 从网上抓取时的原地址；设备上传的为 NULL
+        source TEXT,
+        size INTEGER NOT NULL,
+        created_at REAL NOT NULL
+    );
+    """,
+    """
+    CREATE TABLE video_meta (
+        site TEXT NOT NULL,              -- bilibili / youtube
+        id TEXT NOT NULL,                -- BV 号、番剧 ep / ss 号、YouTube 视频 ID
+        title TEXT,                      -- NULL 表示上次没查到，过一段时间再查
+        owner TEXT,
+        url TEXT,
+        cover_hash TEXT,                 -- media_cache 里封面的 sha256
+        parts_json TEXT NOT NULL DEFAULT '[]',
+        fetched_at REAL NOT NULL,
+        PRIMARY KEY (site, id)
+    );
+    """,
+    """
+    CREATE TABLE site_icons (
+        domain TEXT PRIMARY KEY,         -- Safari 网页的实际域名，例如 www.zhihu.com
+        cover_hash TEXT,                 -- media_cache 里图标的 sha256；NULL 表示没取到，过一段时间再取
+        fetched_at REAL NOT NULL
+    );
+    """,
+    # 图标来源从 Google 改成网站自己声明的图标：清空旧结果，下次用到时重新取
+    "DELETE FROM site_icons;",
 ]
 
 
@@ -153,6 +186,48 @@ class DB:
     def end_stale_manual(self, now: float) -> None:
         self.conn.execute(
             "UPDATE manual_states SET ended_at = expires_at WHERE ended_at IS NULL AND expires_at <= ?", (now,)
+        )
+
+    # -- media_cache
+
+    def get_media(self, media_id: str) -> sqlite3.Row | None:
+        return self.conn.execute("SELECT * FROM media_cache WHERE id = ?", (media_id,)).fetchone()
+
+    def add_media(self, media_id: str, mime: str, path: str, size: int, source: str | None,
+                  created_at: float, origin_url: str | None = None) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO media_cache (id, mime, path, origin_url, source, size, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING
+            """,
+            (media_id, mime, path, origin_url, source, size, created_at),
+        )
+
+    # -- video_meta
+
+    def get_video_meta(self, site: str, vid: str) -> sqlite3.Row | None:
+        return self.conn.execute("SELECT * FROM video_meta WHERE site = ? AND id = ?", (site, vid)).fetchone()
+
+    def save_video_meta(self, site: str, vid: str, fetched_at: float, title: str | None = None,
+                        owner: str | None = None, url: str | None = None, cover_hash: str | None = None,
+                        parts: list[str] | None = None) -> None:
+        self.conn.execute(
+            """
+            INSERT OR REPLACE INTO video_meta (site, id, title, owner, url, cover_hash, parts_json, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (site, vid, title, owner, url, cover_hash, json.dumps(parts or [], ensure_ascii=False), fetched_at),
+        )
+
+    # -- site_icons
+
+    def get_site_icon(self, domain: str) -> sqlite3.Row | None:
+        return self.conn.execute("SELECT * FROM site_icons WHERE domain = ?", (domain,)).fetchone()
+
+    def save_site_icon(self, domain: str, cover_hash: str | None, fetched_at: float) -> None:
+        self.conn.execute(
+            "INSERT OR REPLACE INTO site_icons (domain, cover_hash, fetched_at) VALUES (?, ?, ?)",
+            (domain, cover_hash, fetched_at),
         )
 
     # -- courses_cache

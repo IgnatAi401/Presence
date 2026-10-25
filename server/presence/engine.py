@@ -127,6 +127,13 @@ ANCHOR_SLOTS = ("anchor", "office")
 ENDS_SLOTS = {"office": ("out",), "out": ("office",), "sleep": ("office",)}
 
 
+def public_host(host: str | None) -> bool:
+    """公网域名才显示网页卡片：localhost、局域网名字、IP 地址都不算。"""
+    if not host or "." not in host or host.endswith((".local", ".localhost", ".lan")):
+        return False
+    return not host.replace(".", "").isdigit() and ":" not in host
+
+
 def _fmt(template: str, **values: Any) -> str:
     return template.format_map(defaultdict(str, {k: v for k, v in values.items() if v is not None})).strip()
 
@@ -138,8 +145,9 @@ def _fmt(template: str, **values: Any) -> str:
 class MacAct:
     category: str
     project: str | None = None
-    domain: str | None = None
-    ref: bool = False  # 资料类网页继承了正事（显示“查资料”）
+    domain: str | None = None  # 命中的规则域名（bilibili.com），用来取显示名
+    host: str | None = None  # Safari 当前网页的实际域名（www.bilibili.com），网页卡片用
+    title: str | None = None  # Safari 当前网页的标题
 
     def same(self, other: MacAct | None) -> bool:
         if other is None or self.category != other.category:
@@ -180,6 +188,7 @@ class MacTracker:
         self.pending: MacAct | None = None  # 刚切过去、还没停够 enter_sec 的活动
         self.pending_since: float | None = None
         self.last_serious: tuple[MacAct, float] | None = None  # (正事, 结束时间)
+        self.page: tuple[str, str | None] | None = None  # Safari 此刻在前台显示的网页 (域名, 标题)
 
     @property
     def rules(self) -> Rules:
@@ -202,6 +211,9 @@ class MacTracker:
         self.last_seen = max(self.last_seen or ts, ts)
         self.expires = max(self.expires or 0, ts + ttl)
 
+        host = (data.get("domain") or "").lower()
+        self.page = (host, data.get("title") or None) if public_host(host) and not data.get("hidden") else None
+
         idle_sec = float(data.get("idle_sec") or 0)
         if data.get("locked"):
             self.go_idle(ts)
@@ -216,7 +228,11 @@ class MacTracker:
         c = self.rules.classify_desktop(data)
         if c is None:
             return
-        self.propose(self.resolve(c, ts), ts)
+        act = self.resolve(c, ts)
+        if c.domain:
+            act.host = (data.get("domain") or "").lower() or None
+            act.title = data.get("title") or None
+        self.propose(act, ts)
 
     def heartbeat(self, ts: float, ttl: float) -> None:
         self.last_seen = max(self.last_seen or ts, ts)
@@ -227,7 +243,7 @@ class MacTracker:
             return MacAct(c.category, c.project, c.domain)
         ctx = self.serious_context(ts)
         if ctx:
-            return MacAct(ctx.category, ctx.project, c.domain, ref=True)
+            return MacAct(ctx.category, ctx.project, c.domain)
         return MacAct("browse", None, c.domain)
 
     def serious_context(self, ts: float) -> MacAct | None:
@@ -291,10 +307,10 @@ class MacTracker:
         )
 
     def refresh(self, act: MacAct) -> None:
-        """同一活动内的细节变化（例如切到资料网页、补上项目名），不新开片段。"""
+        """同一活动内的细节变化（例如切到资料网页、换了网页、补上项目名），不新开片段。"""
         cur = self.current
         assert cur is not None
-        cur.ref, cur.domain = act.ref, act.domain
+        cur.domain, cur.host, cur.title = act.domain, act.host, act.title
         if cur.project is None and act.project:
             cur.project = act.project
             if self.current_iv:
@@ -357,6 +373,7 @@ class MacTracker:
 
     def _stop(self, at: float) -> None:
         """离开电脑：不留余温，所有 Mac 活动在空闲开始时结束。"""
+        self.page = None
         if self.current_iv is not None:
             at = max(at, self.current_iv.start)
         for t in list(self.lingers):
@@ -376,8 +393,13 @@ class MacTracker:
         if self.current is not None:
             a = self.current
             cur_tier = self.rules.tier(a.category)
+            # Safari 在前台、且显示的就是这个活动的网页时附上网页卡片（标题、域名、图标）。
+            # 刚切到别的网页、还没停够 enter_sec，或切到了没有网址的页面 / 别的 App 时不附，免得显示旧网页
+            card = None
+            if self.page and a.host == self.page[0]:
+                card = {"kind": "web", "title": self.page[1], "domain": self.page[0]}
             out.append(self.e.activity_item(
-                a.category, self.current_since, detail="查资料" if a.ref else None,
+                a.category, self.current_since, card=card,
                 project=a.project, domain=a.domain,
                 values={"name": self.rules.names.get(a.domain or "")},
             ))
@@ -409,6 +431,8 @@ class Feed:
     expires: float
     interval: Interval
     until: float | None = None  # 主动结束后的余温截止时间
+    session: float | None = None  # 连续进行的起点：换歌、余温内恢复都接着算（since 只是这一首 / 这一段）
+    data_ts: float | None = None  # data（进度等）对应的时间；心跳只续期，不改它
 
 
 def _feed_spec(kind: str, data: dict) -> tuple[str, bool, tuple] | None:
@@ -500,21 +524,27 @@ class Engine:
                     self._end_feed(k, ts)
 
         cur = self.feeds.get(key)
+        session = None
         if cur and (not active or cur.identity != identity or ts > cur.expires):
+            if active and ts <= cur.expires:
+                session = cur.session  # 直接换歌
             if ts > cur.expires:
                 self._end_feed(key, cur.last_ts)
             else:
                 # 主动停止（暂停、关闭）才留余温；换歌、换 App 直接替换
                 stopped = not active and cur.identity == identity
                 cur.data = {**cur.data, **data}
+                cur.last_ts = cur.data_ts = ts  # 卡片的 updated_at 对应暂停那一刻的进度
                 self._end_feed(key, ts, linger=stopped)
             cur = None
         if not active:
             return
         if cur:
-            cur.data, cur.last_ts, cur.expires = data, ts, ts + ttl
+            cur.data, cur.last_ts, cur.data_ts, cur.expires = data, ts, ts, ts + ttl
             return
         prev = self.ended.pop(key, None)
+        if prev is not None and ts < (prev.until or 0):
+            session = session or prev.session  # 暂停后在余温内继续（同一首或下一首）
         if prev is not None and (prev.identity != identity or ts >= (prev.until or 0)):
             prev = None
         tier = self.rules.tier(category)
@@ -526,7 +556,8 @@ class Engine:
         iv = self.open(ACTIVITY, category, ts, source=source, detail=detail,
                        meta={"resumed": True} if interrupted else {})
         since = prev.since if prev is not None else ts
-        self.feeds[key] = Feed(key, category, identity, source, data, since, ts, ts + ttl, iv)
+        self.feeds[key] = Feed(key, category, identity, source, data, since, ts, ts + ttl, iv, session=session or since,
+                               data_ts=ts)
 
     def _end_feed(self, key: str, at: float, linger: bool = False) -> None:
         f = self.feeds.pop(key, None)
@@ -653,7 +684,13 @@ class Engine:
             if m := self.manual.get(slot):
                 anchors.append(self._anchor_item(m.state, m.start, None))
 
+        feeds = [*self.feeds.values(), *self.ended.values()]
         acts: list[Item] = self.mac.items()
+        site_since = None  # 被视频卡片取代的“在看 B站”从什么时候开始
+        if any(f.category == "video" and f.source == self.mac.source for f in feeds):
+            # 同一台 Mac 上报了视频详情：按域名判断的“在看 B站”和视频卡片是同一件事，只留卡片
+            site_since = min((i.since for i in acts if i.category == "video" and i.since), default=None)
+            acts = [i for i in acts if i.category != "video"]
         for slot in ("out", "custom"):
             if m := self.manual.get(slot):
                 it = self.activity_item(m.state, m.start, values={"text": m.text})
@@ -663,13 +700,16 @@ class Engine:
                     it.tier = m.tier
                 acts.append(it)
 
-        feeds = [*self.feeds.values(), *self.ended.values()]
         music = [f for f in feeds if f.category == "music"]
         latest_music = max(music, key=lambda f: f.last_ts, default=None)
         for f in feeds:
             if f.category == "music" and f is not latest_music:
                 continue  # 多台设备同时放歌时只显示最近更新的一个
-            acts.append(self._feed_item(f))
+            it = self._feed_item(f)
+            if f.category == "video" and f.source == self.mac.source and site_since and it.card:
+                # 连续看视频从打开网站算起，换成卡片显示后不从零开始
+                it.card["session_since"] = min(it.card["session_since"], site_since)
+            acts.append(it)
 
         anchors.sort(key=lambda i: (i.rank, -(i.since or 0)))
         acts.sort(key=lambda i: (i.tier, -(i.since or 0)))
@@ -702,11 +742,13 @@ class Engine:
         if f.category == "music":
             card = {k: d.get(k) for k in ("title", "artist", "album", "state", "position", "duration")}
             card["cover_hash"] = d.get("cover_hash")
-            card["updated_at"] = f.last_ts
+            card["updated_at"] = f.data_ts
+            card["session_since"] = f.session  # 连续听歌的起点
             return self.activity_item("music", f.since, values={"title": d.get("title")}, card=card)
         if f.category == "video":
-            card = {k: d.get(k) for k in ("site", "id", "page", "state", "position", "duration")}
-            card["updated_at"] = f.last_ts
+            card = {k: d.get(k) for k in ("site", "id", "page", "state", "position", "duration", "rate")}
+            card["updated_at"] = f.data_ts
+            card["session_since"] = f.session  # 连续看视频的起点：换视频、余温内继续都接着算
             name = {"bilibili": "B站", "youtube": "YouTube"}.get(d.get("site") or "")
             return self.activity_item("video", f.since, values={"name": name}, card=card)
         if f.category == "game":

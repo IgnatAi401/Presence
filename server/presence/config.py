@@ -30,10 +30,16 @@ class Settings:
     db_path: Path = SERVER_DIR / "data" / "presence.db"
     public_origins: list[str] = field(default_factory=lambda: ["https://now.ignat.ai", "https://ignat.ai"])
     media_base: str = "https://api.ignat.ai/presence/api/media"
+    media_max_bytes: int = 2 * 1024 * 1024  # 设备上传封面的大小上限
     rate_per_minute: int = 60
     max_streams: int = 200
     timing: Timing = field(default_factory=Timing)
     calendar: CalendarSettings = field(default_factory=CalendarSettings)
+
+    @property
+    def media_dir(self) -> Path:
+        """封面等图片文件放在数据库旁边的 media/ 目录。"""
+        return self.db_path.parent / "media"
 
     @property
     def tz(self) -> ZoneInfo:
@@ -60,6 +66,7 @@ class Settings:
             public_origins=list(server.get("public_origins", ["https://now.ignat.ai", "https://ignat.ai"]))
             + list(server.get("extra_origins", [])),
             media_base=server.get("media_base", "https://api.ignat.ai/presence/api/media"),
+            media_max_bytes=int(server.get("media_max_bytes", 2 * 1024 * 1024)),
             rate_per_minute=int(server.get("rate_per_minute", 60)),
             max_streams=int(server.get("max_streams", 200)),
             timing=Timing(**{k: v for k, v in raw.get("engine", {}).items() if k in timing_keys}),

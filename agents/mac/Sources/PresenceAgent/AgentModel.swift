@@ -14,12 +14,26 @@ final class AgentModel: ObservableObject {
     @Published private(set) var pausedUntil: Date?
     @Published private(set) var accessibilityOK = SystemProbe.accessibilityTrusted
     @Published private(set) var safariDenied = false
+    @Published private(set) var musicDenied = false
+    /// Safari 里有视频页，但没开“允许来自 Apple 事件的 JavaScript”，读不到播放状态
+    @Published private(set) var videoBlocked = false
+    /// “音乐”正在播放或暂停中的曲目（没在放时为 nil）
+    @Published private(set) var music: MusicState?
+    /// Safari 里正在看的 B站 / YouTube 视频（没在看时为 nil）
+    @Published private(set) var video: VideoState?
     @Published private(set) var projectCount = 0
     /// 最新生成的一条信号，以及最新送达服务器的一条
     @Published private(set) var lastSignal: Signal?
     @Published private(set) var lastDelivered: Signal?
 
     private var policy = ReportPolicy()
+    private var musicPolicy = MusicPolicy()
+    private var videoPolicy = PlaybackPolicy<VideoState>()
+    /// 当前曲目的封面：读一次就缓存；没读到时过一会儿再试（在线曲目的封面可能还没下载好）
+    private var cover: (trackId: String, at: Date, data: Data?, sha256: String?)?
+    private var uploadedCovers: Set<String> = []
+    private var coverUploading: String?
+    private var coverRetryAt = Date.distantPast
     private var matcher = ProjectMatcher(names: [])
     private var matcherScannedAt = Date.distantPast
     private var agentCache: (key: String, at: Date, project: String?)?
@@ -69,10 +83,14 @@ final class AgentModel: ObservableObject {
         let dnc = DistributedNotificationCenter.default()
         observe(dnc, Notification.Name("com.apple.screenIsLocked")) { $0.screenLocked = true; $0.sample() }
         observe(dnc, Notification.Name("com.apple.screenIsUnlocked")) { $0.screenLocked = false; $0.sample() }
+        // “音乐”换歌、播放 / 暂停时发出的通知，收到后立即读一次（不用等下一次定时检查）
+        observe(dnc, Notification.Name("com.apple.Music.playerInfo")) { $0.sampleMusic() }
 
         restartTimer()
         _ = projectMatcher() // 先扫描一次，设置里的项目数量才准确
         sample()
+        sampleMusic()
+        sampleVideo()
         Task { await reporter.flush() }
     }
 
@@ -88,7 +106,11 @@ final class AgentModel: ObservableObject {
     private func restartTimer() {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: max(1, config.pollSec), repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.sample() }
+            MainActor.assumeIsolated {
+                self?.sample()
+                self?.sampleMusic()
+                self?.sampleVideo()
+            }
         }
         timer?.tolerance = 1
     }
@@ -119,10 +141,16 @@ final class AgentModel: ObservableObject {
                 state.project = agentProject(tool: tool, pid: front.pid, windowTitle: title)
             }
             if front.bundleId == SystemProbe.safariBundleId {
-                switch SystemProbe.safariURL() {
-                case let .url(url):
+                switch SystemProbe.safariPage() {
+                case let .page(url, title):
                     safariDenied = false
-                    state.domain = hostOf(url)
+                    let host = hostOf(url)
+                    if config.hides(host: host) {
+                        state.hidden = true
+                    } else {
+                        state.domain = host
+                        state.title = host == nil ? nil : title
+                    }
                 case .denied:
                     safariDenied = true
                 }
@@ -131,6 +159,8 @@ final class AgentModel: ObservableObject {
             // 离开期间沿用之前识别到的项目和网站
             state.project = prev.project
             state.domain = prev.domain
+            state.title = prev.title
+            state.hidden = prev.hidden
         }
 
         current = state
@@ -139,6 +169,80 @@ final class AgentModel: ObservableObject {
             lastSignal = signal
             Task { await reporter.enqueue(signal) }
         }
+    }
+
+    // MARK: 音乐
+
+    func sampleMusic() {
+        guard !paused, !asleep else { return }
+        var state: MusicState?
+        switch SystemProbe.musicState() {
+        case let .track(s):
+            musicDenied = false
+            state = s
+            state?.coverHash = coverHash(for: s)
+        case .denied:
+            musicDenied = true
+        case .notPlaying:
+            break
+        }
+        music = state
+        let now = Date().timeIntervalSince1970
+        if let signal = musicPolicy.signal(for: state, now: now, heartbeatSec: config.heartbeatSec, ttl: config.ttlSec) {
+            lastSignal = signal
+            Task { await reporter.enqueue(signal) }
+        }
+    }
+
+    // MARK: 视频
+
+    /// 看视频时往往不碰键盘鼠标，所以空闲久了也照常读；只在暂停上报和休眠时不读
+    func sampleVideo() {
+        guard !paused, !asleep else { return }
+        var state: VideoState?
+        switch SystemProbe.safariVideos() {
+        case let .tabs(tabs):
+            safariDenied = false
+            videoBlocked = false
+            state = VideoTab.pick(tabs.filter { !config.hides(host: hostOf($0.url)) })
+        case .blocked:
+            videoBlocked = true
+        case .denied:
+            safariDenied = true
+        case .none:
+            break // 没有视频页：沿用上次的判断，打开视频页时再确认
+        }
+        video = state
+        let now = Date().timeIntervalSince1970
+        if let signal = videoPolicy.signal(for: state, now: now, heartbeatSec: config.heartbeatSec, ttl: config.ttlSec) {
+            lastSignal = signal
+            Task { await reporter.enqueue(signal) }
+        }
+    }
+
+    /// 服务器上已有的封面的哈希；还没上传时启动上传，先返回 nil，上传好后再补发一次
+    private func coverHash(for track: MusicState) -> String? {
+        if cover?.trackId != track.trackId
+            || (cover?.sha256 == nil && Date().timeIntervalSince(cover?.at ?? .distantPast) > 10) {
+            let data = SystemProbe.musicArtwork().flatMap { CoverImage.prepare($0) }
+            cover = (track.trackId, Date(), data, data.map(CoverImage.sha256))
+        }
+        guard let data = cover?.data, let hash = cover?.sha256 else { return nil }
+        if uploadedCovers.contains(hash) { return hash }
+        if coverUploading != hash, Date() >= coverRetryAt {
+            coverUploading = hash
+            Task {
+                let ok = await reporter.uploadCover(data, sha256: hash)
+                coverUploading = nil
+                if ok {
+                    uploadedCovers.insert(hash)
+                    sampleMusic()
+                } else {
+                    coverRetryAt = Date().addingTimeInterval(30) // 服务器连不上时 30 秒后再试
+                }
+            }
+        }
+        return nil
     }
 
     private func projectMatcher() -> ProjectMatcher {
@@ -208,25 +312,37 @@ final class AgentModel: ObservableObject {
     func pause(hours: Double = 1) {
         pausedUntil = Date().addingTimeInterval(hours * 3600)
         current = nil
+        music = nil
+        video = nil
     }
 
     func resume() {
         pausedUntil = nil
         policy.reset()
+        musicPolicy.reset()
+        videoPolicy.reset()
         sample()
+        sampleMusic()
+        sampleVideo()
     }
 
-    func save(server: String, token: String) throws {
+    func save(server: String, token: String, hiddenDomains: String) throws {
         var next = config
         next.server = server.trimmingCharacters(in: .whitespacesAndNewlines)
         next.token = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        next.hiddenDomains = AgentConfig.parseDomains(hiddenDomains)
         try ConfigStore.save(next)
         config = next
         matcherScannedAt = .distantPast
         policy.reset()
+        musicPolicy.reset()
+        videoPolicy.reset()
+        coverRetryAt = .distantPast
         Task { await reporter.update(config: next) }
         restartTimer()
         sample()
+        sampleMusic()
+        sampleVideo()
     }
 
     // MARK: 显示
@@ -238,7 +354,21 @@ final class AgentModel: ObservableObject {
         guard let s = current else { return "等待采样…" }
         if s.locked { return "已锁屏 / 休眠" }
         if s.idleSec >= config.awaySec { return "空闲 \(Int(s.idleSec / 60)) 分钟" }
-        return [s.app, s.project, s.domain].compactMap { $0 }.joined(separator: " · ")
+        return [s.app, s.project, s.hidden ? "已隐藏的网站" : s.domain].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    var musicLine: String? {
+        guard let m = music else { return nil }
+        let who = m.artist.isEmpty ? "" : " — \(m.artist)"
+        return "\(m.playing ? "正在听" : "已暂停")：\(m.title)\(who)\(m.coverHash == nil ? "" : " · 有封面")"
+    }
+
+    var videoLine: String? {
+        guard let v = video else { return nil }
+        let site = v.ref.site == "bilibili" ? "B站" : "YouTube"
+        let speed = v.rate == 1 ? "" : " · \(v.rate.formatted())×"
+        let name = v.title.isEmpty ? v.ref.id : v.title
+        return "\(v.playing ? "正在看" : "已暂停")（\(site)）：\(name)\(speed)"
     }
 
     var reportLine: String {

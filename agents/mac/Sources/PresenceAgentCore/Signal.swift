@@ -56,22 +56,29 @@ public struct DesktopState: Equatable, Sendable {
     public var app: String
     public var project: String?
     public var domain: String?
+    /// Safari 当前网页的标题（最多 200 字）
+    public var title: String?
+    /// Safari 当前网站在黑名单里：域名和标题都不上报
+    public var hidden: Bool
     public var idleSec: Double
     public var locked: Bool
 
-    public init(bundleId: String, app: String, project: String? = nil, domain: String? = nil,
-                idleSec: Double = 0, locked: Bool = false) {
+    public init(bundleId: String, app: String, project: String? = nil, domain: String? = nil, title: String? = nil,
+                hidden: Bool = false, idleSec: Double = 0, locked: Bool = false) {
         self.bundleId = bundleId
         self.app = app
         self.project = project
         self.domain = domain
+        self.title = title.map { String($0.prefix(200)) }
+        self.hidden = hidden
         self.idleSec = idleSec
         self.locked = locked
     }
 
     /// 用来判断“有没有变化”：空闲秒数本身不算，只看是否越过离开阈值。
     public func changeKey(awaySec: Double) -> String {
-        [bundleId, project ?? "", domain ?? "", locked ? "locked" : "", idleSec >= awaySec ? "away" : ""]
+        [bundleId, project ?? "", domain ?? "", title ?? "", hidden ? "hidden" : "", locked ? "locked" : "",
+         idleSec >= awaySec ? "away" : ""]
             .joined(separator: "|")
     }
 
@@ -83,6 +90,8 @@ public struct DesktopState: Equatable, Sendable {
         ]
         if let project { data["project"] = .string(project) }
         if let domain { data["domain"] = .string(domain) }
+        if let title, !title.isEmpty { data["title"] = .string(title) }
+        if hidden { data["hidden"] = .bool(true) }
         if locked { data["locked"] = .bool(true) }
         return Signal(kind: "desktop", ts: ts, ttl: ttl, data: data)
     }

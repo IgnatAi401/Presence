@@ -175,7 +175,7 @@ a { color: inherit; }
 .side li.has-card { flex-wrap: wrap; }
 .side li.has-card .card { flex-basis: 100%; margin-top: 4px; }
 
-/* 音乐 / 视频 / 游戏卡片 */
+/* 音乐 / 视频 / 游戏 / 网页卡片 */
 .card {
   display: grid;
   grid-template-columns: 64px 1fr;
@@ -196,6 +196,23 @@ a { color: inherit; }
   background: var(--faint) center / cover no-repeat;
 }
 .card.wide .cover { aspect-ratio: 16 / 9; }
+/* 网页：不画框，一行“小图标 标题 · 域名” */
+.card.web {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  min-width: 0;
+}
+.card.web .cover { flex: none; width: 16px; height: 16px; aspect-ratio: auto; border-radius: 3px; background: center / contain no-repeat; }
+.card.web .cover:not([style*="background-image"]) { display: none; }
+.card.web .body { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.card.web .t { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; font-size: 14px; color: var(--paper); }
+.card.web .s { flex: none; font-size: 12px; }
+a.card.web:hover .t { text-decoration: underline; text-underline-offset: 3px; }
 .card .body { min-width: 0; }
 .card .t {
   display: -webkit-box;
@@ -209,6 +226,30 @@ a { color: inherit; }
 .card .s { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); font-size: 13px; }
 .progress { height: 3px; margin-top: 8px; border-radius: 2px; background: var(--faint); overflow: hidden; }
 .progress i { display: block; height: 100%; width: 0; background: var(--hue, var(--amber)); }
+.card .times {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  color: var(--dim);
+  font: 12px var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+/* 右上角：连续听歌时长 */
+.card.has-badge { position: relative; }
+.card.has-badge .t { padding-right: 112px; }
+.card .badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  color: var(--dim);
+  font: 12px var(--mono), var(--cjk);
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  /* 窄屏：标签单独一行，仍在右上角，不挤占歌名 */
+  .card.has-badge .t { padding-right: 0; }
+  .card .badge { position: static; grid-column: 1 / -1; grid-row: 1; justify-self: end; margin: -4px 0 -8px; }
+}
 
 /* 今日时间线 */
 .today { margin-top: 40px; }

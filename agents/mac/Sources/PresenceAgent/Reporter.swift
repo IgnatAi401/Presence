@@ -86,6 +86,27 @@ actor Reporter {
         }
     }
 
+    /// 上传封面：先查服务器有没有这张图（公开接口），没有才上传。返回服务器上是否已有。
+    func uploadCover(_ data: Data, sha256: String) async -> Bool {
+        guard let url = config.mediaURL(sha256), !config.token.isEmpty else { return false }
+        var head = URLRequest(url: url)
+        head.httpMethod = "HEAD"
+        if let (_, response) = try? await session.data(for: head),
+           (response as? HTTPURLResponse)?.statusCode == 200 {
+            return true
+        }
+        var put = URLRequest(url: url)
+        put.httpMethod = "PUT"
+        put.setValue(CoverImage.mimeType(of: data) ?? "application/octet-stream", forHTTPHeaderField: "Content-Type")
+        put.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        guard let (_, response) = try? await session.upload(for: put, from: data) else { return false }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if !(200 ..< 300).contains(status) {
+            NSLog("PresenceAgent: 上传封面失败，服务器返回 \(status)")
+        }
+        return (200 ..< 300).contains(status)
+    }
+
     private func scheduleRetry(_ reason: String) {
         onUpdate(.failed(reason), queue.count, nil)
         retryTask?.cancel()

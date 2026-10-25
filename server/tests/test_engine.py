@@ -101,7 +101,8 @@ def test_reference_inherits_research():
         sim.mac(t, safari("arxiv.org")).mac(t + 60, MATLAB)
     sim.mac(1300, safari("arxiv.org"))
     s = sim.snap(1500)
-    assert s.main.category == "research" and s.main.detail == "查资料"
+    assert s.main.category == "research" and s.main.detail is None  # 不再写“查资料”，改附网页卡片
+    assert s.main.card == {"kind": "web", "title": None, "domain": "arxiv.org"}
     assert len(sim.segments("research")) == 1
 
 
@@ -109,7 +110,7 @@ def test_reference_during_linger_resumes_serious():
     sim = Sim().mac(0, MATLAB).mac(600, safari("www.bilibili.com"))
     sim.mac(900, safari("github.com"))
     s = sim.snap(1000)
-    assert cats(s) == ("research", []) and s.main.detail == "查资料" and s.main.slacking_since is None
+    assert cats(s) == ("research", []) and s.main.card["domain"] == "github.com" and s.main.slacking_since is None
 
 
 def test_reference_after_linger_expired_is_browse():
@@ -436,3 +437,106 @@ def test_side_sorted_by_tier(tier_order):
     e.ingest("mac", "video", T0, 300, {"site": "bilibili", "id": "BV1", "state": "playing"})
     sim.mac(0, MATLAB)
     assert cats(sim.snap(10)) == (tier_order[0], list(tier_order[1:]))
+
+
+def test_music_session_spans_track_changes_and_short_pauses():
+    e = (sim := Sim()).e
+    e.ingest("windows", "music", T0, 300, {"title": "A", "state": "playing"})
+    e.ingest("windows", "music", T0 + 200, 300, {"title": "B", "state": "playing"})  # 换歌
+    card = sim.snap(210).main.card
+    assert (card["session_since"], sim.snap(210).main.since) == (T0, T0 + 200)
+    e.ingest("windows", "music", T0 + 300, 300, {"title": "B", "state": "paused"})
+    e.ingest("windows", "music", T0 + 330, 300, {"title": "C", "state": "playing"})  # 余温内换下一首
+    assert sim.snap(340).main.card["session_since"] == T0
+    e.ingest("windows", "music", T0 + 400, 300, {"title": "C", "state": "paused"})
+    e.ingest("windows", "music", T0 + 500, 300, {"title": "C", "state": "playing"})  # 停了超过 1 分钟
+    assert sim.snap(510).main.card["session_since"] == T0 + 500
+
+
+def test_music_pause_updates_card_time():
+    e = (sim := Sim()).e
+    e.ingest("windows", "music", T0, 300, {"title": "A", "state": "playing", "position": 0})
+    e.ingest("windows", "music", T0 + 90, 300, {"title": "A", "state": "paused", "position": 90})
+    card = sim.snap(100).main.card
+    assert (card["state"], card["position"], card["updated_at"], card["session_since"]) == ("paused", 90, T0 + 90, T0)
+
+
+def test_video_feed_hides_domain_video_from_same_mac():
+    sim = Sim().mac(0, MATLAB).mac(600, safari("www.bilibili.com"))
+    sim.e.ingest("mac", "video", T0 + 620, 300, {"site": "bilibili", "id": "BV1", "state": "playing"})
+    s = sim.snap(630)
+    assert cats(s) == ("research", ["video"]) and s.side[0].card["id"] == "BV1"
+    assert s.main.slacking_since == T0 + 600  # 摸鱼标记不受影响
+    sim.e.ingest("windows", "video", T0 + 640, 300, {"site": "youtube", "id": "x", "state": "playing"})
+    s = sim.snap(650)
+    assert sorted(i.card["id"] for i in s.side) == ["BV1", "x"]  # 别的设备的视频照常显示
+
+
+def test_domain_video_shown_without_video_feed():
+    s = Sim().mac(0, safari("www.bilibili.com")).snap(5)
+    assert cats(s) == ("video", []) and s.main.card["kind"] == "web"
+
+
+def test_video_session_spans_videos_and_starts_at_site():
+    sim = Sim().mac(0, safari("www.bilibili.com"))
+    sim.e.ingest("mac", "video", T0 + 100, 300, {"site": "bilibili", "id": "BV1", "state": "playing"})
+    s = sim.snap(110)
+    assert s.main.card["session_since"] == T0  # 从打开 B站 算起
+    sim.e.ingest("mac", "video", T0 + 200, 300, {"site": "bilibili", "id": "BV2", "state": "playing"})  # 换视频
+    s = sim.snap(210)
+    assert (s.main.since, s.main.card["session_since"]) == (T0 + 200, T0)
+    sim.e.ingest("windows", "video", T0 + 220, 300, {"site": "youtube", "id": "x", "state": "playing"})
+    yt = next(i for i in sim.snap(230).side + [sim.snap(230).main] if i.card["id"] == "x")
+    assert yt.card["session_since"] == T0 + 220  # 别的设备不沾 Mac 打开网站的时间
+
+
+def test_heartbeat_does_not_move_card_progress_time():
+    e = (sim := Sim()).e
+    e.ingest("mac", "video", T0, 300, {"site": "bilibili", "id": "BV1", "state": "playing", "position": 10})
+    e.ingest("mac", "heartbeat", T0 + 60, 300)
+    card = sim.snap(70).main.card
+    assert (card["position"], card["updated_at"]) == (10, T0)  # 网页按 T0 推算进度，不会往回跳
+
+
+def test_web_card_follows_current_page_and_hidden_is_browse():
+    sim = Sim().mac(0, {**safari("www.zhihu.com"), "title": "问题 A - 知乎"})
+    s = sim.snap(5)
+    assert (s.main.category, s.main.card) == ("browse", {"kind": "web", "title": "问题 A - 知乎", "domain": "www.zhihu.com"})
+    sim.mac(20, {**safari("sspai.com"), "title": "文章"})  # 同类别换网页：立即更新，不新开片段
+    assert sim.snap(21).main.card["domain"] == "sspai.com" and len(sim.segments("browse")) == 1
+    sim.mac(40, {"bundle_id": "com.apple.Safari", "app": "Safari", "hidden": True})
+    s = sim.snap(41)
+    assert (s.main.category, s.main.label, s.main.card) == ("browse", "网上冲浪", None)
+
+
+def test_hidden_site_does_not_inherit_research():
+    sim = Sim().mac(0, MATLAB).mac(100, {"bundle_id": "com.apple.Safari", "app": "Safari", "hidden": True})
+    s = sim.snap(200)
+    assert s.main.category == "research" and s.main.slacking_since == T0 + 100
+    assert [(i.category, i.card) for i in s.side] == [("browse", None)]
+
+
+def test_web_card_only_on_current_activity():
+    sim = Sim().mac(0, {**safari("www.zhihu.com"), "title": "知乎"}).mac(100, MATLAB)
+    s = sim.snap(120)
+    assert cats(s) == ("research", ["browse"]) and s.side[0].card is None  # 离开 Safari 后不再显示网页
+
+
+def test_web_card_never_shows_stale_page():
+    sim = Sim().mac(0, VSCODE).mac(100, {**safari("github.com"), "title": "GitHub"})
+    assert sim.snap(101).main.card["title"] == "GitHub"  # 资料网页并入开发，立即显示
+    sim.mac(110, {"bundle_id": "com.apple.Safari", "app": "Safari"})  # Safari 起始页，没有网址
+    assert sim.snap(111).main.card is None
+    sim.mac(120, {**safari("www.bilibili.com"), "title": "B站视频"})  # 切到别的类别，还没停够 10 秒
+    s = sim.snap(125)
+    assert (s.main.category, s.main.card) == ("dev", None)
+    s = sim.snap(131)  # 开发进入余温（摸鱼），视频卡片在伴随状态
+    assert (s.main.category, s.main.card, s.side[0].card["title"]) == ("dev", None, "B站视频")
+    sim.mac(140, FINDER)  # 切到不分类的 App：沿用看视频，但不再显示网页
+    assert sim.snap(141).side[0].card is None
+
+
+def test_no_web_card_for_local_hosts():
+    for host in ("localhost", "127.0.0.1", "nas.local", "192.168.1.5"):
+        s = Sim().mac(0, VSCODE).mac(10, {**safari(host), "title": "本地"}).snap(11)
+        assert s.main.card is None, host

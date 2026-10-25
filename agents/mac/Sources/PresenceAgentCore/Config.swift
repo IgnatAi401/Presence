@@ -37,6 +37,8 @@ public struct AgentConfig: Codable, Equatable, Sendable {
     ]
     /// 会话记录多久之内有更新才算“正在用”（秒）
     public var agentActiveSec: Double = 1800
+    /// 不公开具体内容的网站（子域名自动包含）：不上报域名、标题和视频，网页上只显示“网上冲浪”
+    public var hiddenDomains: [String] = []
 
     public init() {}
 
@@ -54,12 +56,37 @@ public struct AgentConfig: Codable, Equatable, Sendable {
         pollSec = try c.decodeIfPresent(Double.self, forKey: .pollSec) ?? d.pollSec
         agentApps = try c.decodeIfPresent([String: String].self, forKey: .agentApps) ?? d.agentApps
         agentActiveSec = try c.decodeIfPresent(Double.self, forKey: .agentActiveSec) ?? d.agentActiveSec
+        hiddenDomains = try c.decodeIfPresent([String].self, forKey: .hiddenDomains) ?? d.hiddenDomains
     }
 
-    public var signalURL: URL? {
+    public var signalURL: URL? { endpoint("signal") }
+
+    /// host 是否在黑名单里：完全相同，或是黑名单域名的子域名（www.zhihu.com 命中 zhihu.com）
+    public func hides(host: String?) -> Bool {
+        guard let host = host?.lowercased() else { return false }
+        return hiddenDomains.contains { d in host == d || host.hasSuffix("." + d) }
+    }
+
+    /// 把用户输入的黑名单（逗号、空格或换行分隔，可以粘贴网址）整理成域名列表
+    public static func parseDomains(_ text: String) -> [String] {
+        var out: [String] = []
+        for raw in text.split(whereSeparator: { ",，;； \n\t".contains($0) }) {
+            var s = raw.lowercased()
+            if let host = hostOf(s) { s = host }
+            s = s.trimmingCharacters(in: CharacterSet(charactersIn: "./"))
+            if s.hasPrefix("www.") { s.removeFirst(4) }
+            if s.contains("."), !out.contains(s) { out.append(s) }
+        }
+        return out
+    }
+
+    /// 封面图片的上传 / 查询地址：media/{sha256}
+    public func mediaURL(_ sha256: String) -> URL? { endpoint("media/" + sha256) }
+
+    private func endpoint(_ path: String) -> URL? {
         let base = server.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !base.isEmpty else { return nil }
-        return URL(string: base.hasSuffix("/") ? base + "signal" : base + "/signal")
+        return URL(string: base.hasSuffix("/") ? base + path : base + "/" + path)
     }
 }
 

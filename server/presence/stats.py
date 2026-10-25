@@ -30,13 +30,21 @@ def _clip(rows, a: float, b: float, now: float) -> list[dict[str, Any]]:
 
 
 def totals(segs: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
-    """每条线、每个类别分别计时，允许重叠；正事的摸鱼时段不计入。"""
-    out: dict[str, dict[str, float]] = {"anchor": {}, "activity": {}}
+    """每条线、每个类别分别计时；正事的摸鱼时段不计入。
+    不同类别可以重叠（边听歌边科研）；同一类别重叠的部分只算一次
+    （例如 Safari 前台在 B站 和小工具上报的视频详情同时记了“看视频”）。"""
+    spans: dict[tuple[str, str], list[tuple[float, float]]] = {}
     for s in segs:
-        if s["slacking"]:
-            continue
-        line = out[s["line"]]
-        line[s["category"]] = line.get(s["category"], 0) + s["end"] - s["start"]
+        if not s["slacking"]:
+            spans.setdefault((s["line"], s["category"]), []).append((s["start"], s["end"]))
+    out: dict[str, dict[str, float]] = {"anchor": {}, "activity": {}}
+    for (line, cat), xs in spans.items():
+        total, reach = 0.0, float("-inf")
+        for a, b in sorted(xs):
+            if b > reach:
+                total += b - max(a, reach)
+                reach = b
+        out[line][cat] = total
     return {k: {c: round(v) for c, v in d.items()} for k, d in out.items()}
 
 

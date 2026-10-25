@@ -2,7 +2,10 @@
 
 const params = new URLSearchParams(location.search);
 const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
-const API = params.get("api") || (LOCAL ? "http://127.0.0.1:8790/presence/api" : "https://api.ignat.ai/presence/api");
+const PROD_API = "https://api.ignat.ai/presence/api";
+const API = params.get("api") || (LOCAL ? "http://127.0.0.1:8790/presence/api" : PROD_API);
+// 服务器给的封面地址写的是正式域名；本地调试时改成实际连接的接口
+const mediaUrl = (url) => (url.startsWith(`${PROD_API}/`) ? API + url.slice(PROD_API.length) : url);
 
 const KICKER = {
   anchor: "此刻",
@@ -15,6 +18,7 @@ const NAMES = {
 };
 
 const CARD_ROW = { music: "在听音乐", game: "在玩游戏" };
+const VIDEO_SITES = { bilibili: "B站", youtube: "YouTube" };
 
 const $ = (id) => document.getElementById(id);
 const hue = (category) => `var(--c-${category}, var(--amber))`;
@@ -50,11 +54,19 @@ function dur(sec) {
 const clock = (ts) =>
   new Date(ts * 1000).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 
+// 连续进行的时长：听歌、看视频跨换歌 / 换视频累计；暂停时停在暂停那一刻
+function sessionSec(card, t) {
+  const end = card.state === "playing" ? t : card.updated_at || t;
+  return end - card.session_since;
+}
+
 function metaText(item, t) {
   const parts = [];
   if (item.type === "anchor" && item.category === "class" && item.until) {
     parts.push(`还剩 ${dur(item.until - t)}`);
-  } else if (item.since) {
+  } else if (item.category === "video" && item.card?.session_since) {
+    parts.push(`已持续 ${dur(sessionSec(item.card, t))}`);
+  } else if (item.since && !item.card?.session_since) {
     parts.push(`已持续 ${dur(t - item.since)}`);
   }
   if (item.detail) parts.push(item.detail);
@@ -67,42 +79,63 @@ function metaText(item, t) {
   return parts;
 }
 
-function progress(card, t) {
-  if (!card || !card.duration) return null;
+// 播放位置（秒），按收到后经过的时间和倍速推算
+function position(card, t) {
   let pos = card.position || 0;
-  if (card.state === "playing") pos += t - (card.updated_at || t);
-  return Math.min(1, Math.max(0, pos / card.duration));
+  if (card.state === "playing") pos += (t - (card.updated_at || t)) * (card.rate || 1);
+  return Math.min(card.duration, Math.max(0, pos));
 }
+
+const mmss = (sec) => {
+  sec = Math.floor(sec);
+  const s = String(sec % 60).padStart(2, "0");
+  return sec >= 3600 ? `${Math.floor(sec / 3600)}:${String(Math.floor(sec / 60) % 60).padStart(2, "0")}:${s}`
+    : `${Math.floor(sec / 60)}:${s}`;
+};
 
 function renderCard(item, t) {
   const c = item.card;
   if (!c) return null;
-  const cover = h("div", { class: "cover", style: c.cover ? { backgroundImage: `url("${encodeURI(c.cover)}")` } : {} });
+  const cover = h("div", { class: "cover", style: c.cover ? { backgroundImage: `url("${encodeURI(mediaUrl(c.cover))}")` } : {} });
   let title = item.label;
   let sub = "";
   let href = null;
-  if (item.category === "music") {
+  let badge = null;
+  const web = c.kind === "web";
+  if (web) {
+    // Safari 当前网页：标题 + 域名 + 网站图标
+    const site = c.domain.replace(/^www\./, "");
+    title = c.title || site;
+    sub = site;
+    href = `https://${c.domain}`;
+  } else if (item.category === "music") {
     title = c.title || "未知曲目";
     sub = [c.artist, c.album].filter(Boolean).join(" · ") + (c.state === "paused" ? " · 已暂停" : "");
+    if (c.session_since) badge = `连续听歌 ${dur(sessionSec(c, t))}`;
   } else if (item.category === "video") {
+    // 服务器还没查到标题时只有进度条
     title = c.title || item.label;
-    sub = c.owner || "";
+    const speed = c.rate && c.rate !== 1 ? `${c.rate}×` : null;
+    sub = [c.owner || VIDEO_SITES[c.site], speed, c.state === "paused" ? "已暂停" : null].filter(Boolean).join(" · ");
     href = c.url || null;
   } else if (item.category === "game") {
     title = c.name || item.label;
     sub = `本次已玩 ${dur(t - (c.since || item.since))}`;
     href = c.appid ? `https://store.steampowered.com/app/${encodeURIComponent(c.appid)}` : null;
   }
-  const p = progress(c, t);
+  const pos = c.duration ? position(c, t) : null;
   const body = h("div", { class: "body" },
     h("div", { class: "t", title }, title),
     sub ? h("div", { class: "s", title: sub }, sub) : null,
-    p != null ? h("div", { class: "progress" }, h("i", { style: { width: `${(p * 100).toFixed(2)}%` } })) : null,
+    pos != null ? h("div", { class: "progress" }, h("i", { style: { width: `${((pos / c.duration) * 100).toFixed(2)}%` } })) : null,
+    pos != null ? h("div", { class: "times" }, h("span", {}, mmss(pos)), h("span", {}, mmss(c.duration))) : null,
   );
-  const attrs = { class: `card${item.category === "music" ? "" : " wide"}`, "--hue": hue(item.category) };
+  const kind = web ? " web" : item.category === "music" ? "" : " wide";
+  const attrs = { class: `card${kind}`, "--hue": hue(item.category) };
   return href
     ? h("a", { ...attrs, href, target: "_blank", rel: "noopener" }, cover, body)
-    : h("div", attrs, cover, body);
+    : h("div", { ...attrs, class: `${attrs.class}${badge ? " has-badge" : ""}` }, cover, body,
+      badge ? h("span", { class: "badge" }, badge) : null);
 }
 
 function renderMain(t) {
@@ -132,7 +165,8 @@ function renderSide(t) {
     const sub = [];
     if (item.slacking) sub.push(`🐟 摸鱼中 ${dur(t - item.slacking.since)}`);
     else if (item.card?.state === "paused") sub.push("已暂停");
-    else if (item.since) sub.push(dur(t - item.since));
+    else if (item.category === "video" && item.card?.session_since) sub.push(dur(sessionSec(item.card, t)));
+    else if (item.since && !item.card?.session_since) sub.push(dur(t - item.since));
     // 有卡片时歌名、游戏名在卡片里，上面这行只写类别
     const text = card ? CARD_ROW[item.category] || item.label
       : item.detail ? `${item.label} · ${item.detail}` : item.label;

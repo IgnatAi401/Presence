@@ -12,6 +12,7 @@ dependencies = [
     "pyyaml>=6.0",
     # 读取苹果日历（课表），只在 macOS 上安装
     "pyobjc-framework-eventkit>=11; sys_platform == 'darwin'",
+    "truststore>=0.10",
 ]
 
 [dependency-groups]

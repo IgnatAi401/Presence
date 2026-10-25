@@ -24,7 +24,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>读取 Safari 当前标签页的网址，只上报域名，用来判断在查资料、写论文还是看视频。</string>
+	<string>读取 Safari 当前标签页的网址（只上报域名），用来判断在查资料、写论文还是看视频；读取“音乐”正在播放的歌曲和封面，显示在 now 页面上。</string>
 	<!-- 允许连接本机调试服务器 http://127.0.0.1:8790 -->
 	<key>NSAppTransportSecurity</key>
 	<dict>

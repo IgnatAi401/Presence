@@ -21,7 +21,7 @@ uv run pytest                                           # 测试
 
 - 分类规则和活动等级：`server/config/rules.yaml`，改完重启即可。
 - 读取课表需要日历权限，先单独运行一次，在弹窗里允许：`uv run python -m presence.sources.calendar 课程表`
-- 接口：`/presence/api/signal`（设备令牌）、`now`、`stream`（SSE）、`today`、`health`。
+- 接口：`/presence/api/signal`、`PUT media/{sha256}`（设备令牌）、`media/{sha256}`（封面图片，存在 `data/media/`）、`now`、`stream`（SSE）、`today`、`health`。
 
 模拟一条上报：
 

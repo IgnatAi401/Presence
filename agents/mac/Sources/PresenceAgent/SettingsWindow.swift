@@ -29,7 +29,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         let hosting = NSHostingController(rootView: SettingsView(model: model))
         hosting.sizingOptions = []
         let window = NSWindow(contentViewController: hosting)
-        window.setContentSize(NSSize(width: 460, height: 400))
+        window.setContentSize(NSSize(width: 460, height: 560))
         window.title = "Presence 设置"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false

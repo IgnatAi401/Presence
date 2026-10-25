@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import Testing
 @testable import PresenceAgentCore
 
@@ -187,5 +188,212 @@ import Testing
         p.waitUntilExit()
         #expect(AgentWorkspace.codexCwd(title: "测试性能", database: path) == "/Users/me/Developer/Presence")
         #expect(AgentWorkspace.codexCwd(title: "没有", database: path) == nil)
+    }
+}
+
+@Suite struct MusicPolicyTests {
+    let a = MusicState(trackId: "A1", title: "A", artist: "x", album: "y", duration: 200, position: 10, playing: true)
+
+    @Test func signalFields() {
+        var s = a
+        s.coverHash = "ab12"
+        let sig = s.signal(ts: 100, ttl: 300)
+        #expect(sig.kind == "music" && sig.ttl == 300)
+        #expect(sig.data["player"] == .string("apple_music"))
+        #expect(sig.data["state"] == .string("playing"))
+        #expect(sig.data["position"] == .number(10) && sig.data["duration"] == .number(200))
+        #expect(sig.data["cover_hash"] == .string("ab12"))
+        #expect(a.signal(ts: 100, ttl: 300).data["cover_hash"] == nil)
+    }
+
+    @Test func sendsOnChangesAndHeartbeat() {
+        var p = MusicPolicy()
+        #expect(p.signal(for: a, now: 0, heartbeatSec: 120, ttl: 300) != nil)
+        var s = a
+        s.position = 15 // 正常往前走，不发
+        #expect(p.signal(for: s, now: 5, heartbeatSec: 120, ttl: 300) == nil)
+        s.position = 80 // 拖动进度
+        #expect(p.signal(for: s, now: 10, heartbeatSec: 120, ttl: 300) != nil)
+        s.position = 200
+        s.trackId = "B1"
+        s.title = "B" // 换歌
+        #expect(p.signal(for: s, now: 12, heartbeatSec: 120, ttl: 300) != nil)
+        s.coverHash = "cd34" // 封面传好了
+        #expect(p.signal(for: s, now: 13, heartbeatSec: 120, ttl: 300)?.data["cover_hash"] == .string("cd34"))
+        s.position = 200 + 120
+        #expect(p.signal(for: s, now: 133, heartbeatSec: 120, ttl: 300) != nil) // 心跳
+    }
+
+    @Test func pauseSentOnceThenQuiet() {
+        var p = MusicPolicy()
+        _ = p.signal(for: a, now: 0, heartbeatSec: 120, ttl: 300)
+        var s = a
+        s.position = 30
+        s.playing = false
+        #expect(p.signal(for: s, now: 20, heartbeatSec: 120, ttl: 300)?.data["state"] == .string("paused"))
+        #expect(p.signal(for: s, now: 500, heartbeatSec: 120, ttl: 300) == nil) // 暂停中不发心跳
+        s.playing = true
+        #expect(p.signal(for: s, now: 510, heartbeatSec: 120, ttl: 300)?.data["state"] == .string("playing"))
+    }
+
+    @Test func quitWhilePlayingSendsPausedOnce() {
+        var p = MusicPolicy()
+        _ = p.signal(for: a, now: 0, heartbeatSec: 120, ttl: 300)
+        let sig = p.signal(for: nil, now: 20, heartbeatSec: 120, ttl: 300)
+        #expect(sig?.data["state"] == .string("paused"))
+        #expect(sig?.data["position"] == .number(30))
+        #expect(p.signal(for: nil, now: 30, heartbeatSec: 120, ttl: 300) == nil)
+        var q = MusicPolicy()
+        #expect(q.signal(for: nil, now: 0, heartbeatSec: 120, ttl: 300) == nil) // 一直没在放
+    }
+}
+
+@Suite struct HiddenDomainTests {
+    @Test func parseAndMatch() {
+        let domains = AgentConfig.parseDomains("zhihu.com, https://www.Weibo.com/u/1\n  xiaohongshu.com；bad zhihu.com")
+        #expect(domains == ["zhihu.com", "weibo.com", "xiaohongshu.com"])
+        var c = AgentConfig()
+        c.hiddenDomains = domains
+        #expect(c.hides(host: "www.zhihu.com") && c.hides(host: "zhihu.com") && c.hides(host: "WEIBO.COM"))
+        #expect(!c.hides(host: "notzhihu.com") && !c.hides(host: nil))
+    }
+
+    @Test func desktopSignalTitleAndHidden() {
+        var s = DesktopState(bundleId: "com.apple.Safari", app: "Safari", domain: "arxiv.org",
+                             title: String(repeating: "论", count: 300))
+        #expect(s.signal(ts: 0, ttl: 300).data["title"] == .string(String(repeating: "论", count: 200)))
+        let key = s.changeKey(awaySec: 600)
+        s.title = "另一篇"
+        #expect(s.changeKey(awaySec: 600) != key) // 换网页立即上报
+        let hidden = DesktopState(bundleId: "com.apple.Safari", app: "Safari", hidden: true)
+        let data = hidden.signal(ts: 0, ttl: 300).data
+        #expect(data["hidden"] == .bool(true) && data["domain"] == nil && data["title"] == nil)
+    }
+}
+
+@Suite struct VideoTests {
+    @Test func parseBilibili() {
+        #expect(VideoRef.parse("https://www.bilibili.com/video/BV1xx411c7mD/?spm_id_from=333")
+            == VideoRef(site: "bilibili", id: "BV1xx411c7mD"))
+        #expect(VideoRef.parse("https://www.bilibili.com/video/BV1xx411c7mD?p=3")?.page == 3)
+        #expect(VideoRef.parse("https://www.bilibili.com/video/BV1xx411c7mD?p=1")?.page == nil) // 第 1 P 不记
+        #expect(VideoRef.parse("https://www.bilibili.com/bangumi/play/ep12345")?.id == "ep12345")
+        #expect(VideoRef.parse("https://m.bilibili.com/video/BV1xx411c7mD")?.site == "bilibili")
+        #expect(VideoRef.parse("https://www.bilibili.com/") == nil)
+        #expect(VideoRef.parse("https://space.bilibili.com/123") == nil)
+    }
+
+    @Test func parseYouTube() {
+        #expect(VideoRef.parse("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s")
+            == VideoRef(site: "youtube", id: "dQw4w9WgXcQ"))
+        #expect(VideoRef.parse("https://www.youtube.com/shorts/abc123")?.id == "abc123")
+        #expect(VideoRef.parse("https://www.youtube.com/watch") == nil)
+        #expect(VideoRef.parse("https://www.youtube.com/@channel") == nil)
+        #expect(VideoRef.parse("https://notyoutube.com/watch?v=x") == nil)
+        #expect(VideoRef.parse(nil) == nil)
+    }
+
+    @Test func probeParsing() {
+        let tab = VideoTab(url: "https://www.youtube.com/watch?v=A", title: "t", probe: "1,12.34,300,1.5", front: true)
+        #expect(tab.state == VideoState(ref: VideoRef(site: "youtube", id: "A"), title: "t", duration: 300,
+                                        position: 12.34, playing: true, rate: 1.5))
+        var empty = tab
+        empty.probe = "" // 页面还没加载出 <video>
+        #expect(empty.state == nil)
+        var live = tab
+        live.probe = "1,50,0,1" // 直播没有时长
+        #expect(live.state?.duration == 0)
+    }
+
+    @Test func pickPrefersPlaying() {
+        func tab(_ id: String, playing: Bool, front: Bool) -> VideoTab {
+            VideoTab(url: "https://www.bilibili.com/video/\(id)", title: id, probe: "\(playing ? 1 : 0),1,100,1",
+                     front: front)
+        }
+        #expect(VideoTab.pick([tab("BV1", playing: false, front: true), tab("BV2", playing: true, front: false)])?
+            .ref.id == "BV2")
+        #expect(VideoTab.pick([tab("BV1", playing: true, front: false), tab("BV2", playing: true, front: true)])?
+            .ref.id == "BV2")
+        #expect(VideoTab.pick([tab("BV1", playing: false, front: true)])?.playing == false)
+        #expect(VideoTab.pick([tab("BV1", playing: false, front: false)]) == nil) // 后台暂停的不算在看
+        #expect(VideoTab.pick([]) == nil)
+    }
+
+    @Test func signalFields() {
+        let v = VideoState(ref: VideoRef(site: "bilibili", id: "BV1", page: 2), duration: 600, position: 61.26,
+                           playing: true, rate: 2)
+        let sig = v.signal(ts: 100, ttl: 300)
+        #expect(sig.kind == "video")
+        #expect(sig.data["site"] == .string("bilibili") && sig.data["id"] == .string("BV1"))
+        #expect(sig.data["page"] == .number(2) && sig.data["rate"] == .number(2))
+        #expect(sig.data["position"] == .number(61.3) && sig.data["state"] == .string("playing"))
+        var normal = v
+        normal.rate = 1
+        normal.ref.page = nil
+        #expect(normal.signal(ts: 100, ttl: 300).data["rate"] == nil)
+        #expect(normal.signal(ts: 100, ttl: 300).data["page"] == nil)
+    }
+
+    @Test func policyFollowsPlaybackRate() {
+        var p = PlaybackPolicy<VideoState>()
+        var v = VideoState(ref: VideoRef(site: "bilibili", id: "BV1"), duration: 600, position: 0, playing: true, rate: 2)
+        #expect(p.signal(for: v, now: 0, heartbeatSec: 120, ttl: 300) != nil)
+        v.position = 10 // 2 倍速 5 秒走了 10 秒，不算拖动
+        #expect(p.signal(for: v, now: 5, heartbeatSec: 120, ttl: 300) == nil)
+        v.rate = 1 // 改倍速立即发
+        #expect(p.signal(for: v, now: 6, heartbeatSec: 120, ttl: 300) != nil)
+        v.ref.page = 2 // 换分 P
+        v.position = 0
+        #expect(p.signal(for: v, now: 7, heartbeatSec: 120, ttl: 300)?.data["page"] == .number(2))
+        v.title = "（1）新标题" // 标题变化不发
+        v.position = 3
+        #expect(p.signal(for: v, now: 10, heartbeatSec: 120, ttl: 300) == nil)
+        #expect(p.signal(for: nil, now: 20, heartbeatSec: 120, ttl: 300)?.data["state"] == .string("paused"))
+    }
+}
+
+@Suite struct CoverImageTests {
+    @Test func mimeSniffing() {
+        #expect(CoverImage.mimeType(of: Data([0xFF, 0xD8, 0xFF, 0xE0])) == "image/jpeg")
+        #expect(CoverImage.mimeType(of: Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0])) == "image/png")
+        #expect(CoverImage.mimeType(of: Data("RIFF\0\0\0\0WEBPVP8 ".utf8)) == "image/webp")
+        #expect(CoverImage.mimeType(of: Data("GIF89a".utf8)) == nil)
+    }
+
+    @Test func sha256Hex() {
+        #expect(CoverImage.sha256(Data("abc".utf8))
+            == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
+
+    @Test func prepareKeepsSmallAndShrinksLarge() throws {
+        let small = Data([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3])
+        #expect(CoverImage.prepare(small) == small)
+        #expect(CoverImage.prepare(Data("not an image".utf8)) == nil)
+
+        // 生成一张 1200×1200 的 TIFF（服务器不收的格式），应被缩小并转成 JPEG
+        let ctx = try #require(CGContext(data: nil, width: 1200, height: 1200, bitsPerComponent: 8, bytesPerRow: 0,
+                                         space: CGColorSpaceCreateDeviceRGB(),
+                                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        ctx.setFillColor(red: 0.2, green: 0.5, blue: 0.8, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: 1200, height: 1200))
+        let tiff = NSMutableData()
+        let dest = try #require(CGImageDestinationCreateWithData(tiff, "public.tiff" as CFString, 1, nil))
+        CGImageDestinationAddImage(dest, try #require(ctx.makeImage()), nil)
+        #expect(CGImageDestinationFinalize(dest))
+
+        let out = try #require(CoverImage.prepare(tiff as Data))
+        #expect(CoverImage.mimeType(of: out) == "image/jpeg")
+        let src = try #require(CGImageSourceCreateWithData(out as CFData, nil))
+        let img = try #require(CGImageSourceCreateImageAtIndex(src, 0, nil))
+        #expect(max(img.width, img.height) == 600)
+    }
+}
+
+@Suite struct MediaURLTests {
+    @Test func mediaURL() {
+        var c = AgentConfig()
+        c.server = "http://127.0.0.1:8790/presence/api/"
+        #expect(c.mediaURL("ab")?.absoluteString == "http://127.0.0.1:8790/presence/api/media/ab")
+        #expect(c.signalURL?.absoluteString == "http://127.0.0.1:8790/presence/api/signal")
     }
 }
