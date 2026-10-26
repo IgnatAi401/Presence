@@ -58,7 +58,8 @@ input[type="date"], select {
 }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 0; }
 .chips button { display: inline-flex; align-items: center; gap: 6px; }
-.chips button::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--hue); }
+/* 色点是类别颜色（--dot），选中时的边框用面板颜色 */
+.chips button::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--dot); }
 .btn:hover, .day-nav button:not(:disabled):hover, .seg button:hover, .chips button:hover { border-color: var(--faint); }
 
 /* 悬停提示 */
@@ -99,14 +100,14 @@ input[type="date"], select {
   background: rgba(236, 234, 245, 0.06);
 }
 .cell.blank { background: none; }
-/* 单一色相，越多越深越亮 */
-.cell[data-level="1"] { background: color-mix(in srgb, var(--c-research) 22%, #0C0C14); }
-.cell[data-level="2"] { background: color-mix(in srgb, var(--c-research) 42%, #0C0C14); }
-.cell[data-level="3"] { background: color-mix(in srgb, var(--c-research) 64%, #0C0C14); }
-.cell[data-level="4"] { background: color-mix(in srgb, var(--c-research) 84%, #0C0C14); }
-.cell[data-level="5"] { background: var(--c-research); }
+/* 单一色相（面板的 --hue），越多越深越亮 */
+.cell[data-level="1"] { background: color-mix(in srgb, var(--hue) 22%, #0C0C14); }
+.cell[data-level="2"] { background: color-mix(in srgb, var(--hue) 42%, #0C0C14); }
+.cell[data-level="3"] { background: color-mix(in srgb, var(--hue) 64%, #0C0C14); }
+.cell[data-level="4"] { background: color-mix(in srgb, var(--hue) 84%, #0C0C14); }
+.cell[data-level="5"] { background: var(--hue); }
 button.cell:hover { box-shadow: 0 0 0 1px var(--paper); }
-.cell[aria-current] { box-shadow: 0 0 0 2px var(--amber); }
+.cell[aria-current] { box-shadow: 0 0 0 2px var(--paper); }
 .heat-legend { display: flex; align-items: center; justify-content: flex-end; gap: 3px; margin-top: 10px; color: var(--dim); font-size: 11px; }
 .heat-legend span { margin: 0 4px; }
 

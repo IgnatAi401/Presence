@@ -87,12 +87,11 @@ function renderTrend() {
   const cats = Object.keys(sums).filter((c) => sums[c] >= 600).sort((a, b) => sums[b] - sums[a]);
   if (!cats.includes(picked)) picked = cats.includes("research") ? "research" : cats[0];
   $("chips").replaceChildren(...cats.map((c) => h("button", {
-    type: "button", "aria-pressed": String(c === picked), "--hue": hue(c),
+    type: "button", "aria-pressed": String(c === picked), "--dot": hue(c),
     onclick: () => { picked = c; renderTrend(); },
   }, hist.names[c] || c)));
   const max = Math.max(1, ...ps.map((p) => p.cats[picked] || 0));
   const name = hist.names[picked] || picked;
-  $("trend").style.setProperty("--hue", hue(picked));
   $("trend").replaceChildren(...ps.map((p) => {
     const sec = p.cats[picked] || 0;
     const label = unit === "week" ? `${p.key.slice(5)} 起` : p.key;
@@ -104,9 +103,9 @@ function renderTrend() {
 }
 
 function renderRanks() {
-  rankList($("games"), hist.games.map((g) => ({ label: g.title || g.key, sub: `${g.plays} 次`, value: g.seconds, hue: hue("game") })));
+  rankList($("games"), hist.games.map((g) => ({ label: g.title || g.key, sub: `${g.plays} 次`, value: g.seconds, hue: "inherit" })));
   rankList($("music"), hist.music.map((m) => ({ label: m.title || m.key, sub: [m.artist, `${m.plays} 次`].filter(Boolean).join(" · "),
-    value: m.seconds, hue: hue("music") })));
+    value: m.seconds, hue: "inherit" })));
 }
 
 for (const b of document.querySelectorAll(".seg button")) {

@@ -35,12 +35,24 @@ function phoneIcon(item, slot) {
   return icon;
 }
 
-// 卡片主题色：有封面、App 图标就按图片的主色，没有（或图片没什么颜色）就用类别颜色
+// 卡片主题色：此刻视图整体是蓝色系（见 style.css 的 --bl-*）。
+// 有封面、App 图标时按图片的主色，但只在主色本身偏蓝紫（色相 180°–290°）或是白色时才用；
+// 否则按类别取一种蓝。离开、离线保持灰色
+const BLUE = {
+  dev: "cyan", office: "cyan",
+  class: "blue", research: "blue", browse: "blue",
+  game: "indigo", video: "indigo", phone: "indigo",
+  sleep: "violet", music: "violet", custom: "violet",
+  eat: "ice", out: "ice",
+};
 function cardHue(item) {
   const c = item.card;
   const url = item.category === "phone" && item.icon ? `/icons/apps/${item.icon}.png`
     : c?.cover ? mediaUrl(c.cover) : null;
-  return imageHue(url, () => render()) || hue(item.category);
+  const img = imageHue(url, () => render());
+  const deg = img?.startsWith("hsl(") ? Number(img.slice(4).split(" ")[0]) : null;
+  if (img && (deg == null || (deg >= 180 && deg <= 290))) return img;
+  return BLUE[item.category] ? `var(--bl-${BLUE[item.category]})` : hue(item.category);
 }
 
 // 看完了在看评论区：视频暂停着，但人还在

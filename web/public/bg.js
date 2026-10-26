@@ -1,9 +1,12 @@
-// 全站背景：深色底上一张细网格，几道各类别颜色的霓虹光沿网格线跑，到路口时偶尔拐弯，像电路板里的信号。
+// 全站背景：深色底上一张细网格，几道霓虹光沿网格线跑（此刻蓝色系、历史粉色系、/me 各类别颜色），到路口时偶尔拐弯，像电路板里的信号。
 // 不再按页面取一个统一主题色：每张卡片用自己的颜色（见 tintCards）。
 // 画布不可用时退回 style.css 里的静态网格；减少动态效果时只画静止的一帧
 
 const GRID = 56; // 网格间距（CSS 像素），和 style.css 的静态网格一致
 const PALETTE = ["dev", "video", "research", "music", "class", "game", "phone", "eat"];
+// 此刻视图的光只用蓝色系、历史视图只用粉色系（见 style.css）；/me 照旧用各类别颜色
+const BLUES = ["--bl-cyan", "--bl-blue", "--bl-indigo", "--bl-violet", "--bl-ice"];
+const PINK = ["--pk-hot", "--pk-rose", "--pk-orchid", "--pk-blush"];
 const MAX_PULSES = 7;
 
 // CSS 颜色（可以是 var(...)）→ [r, g, b]，0–255；带透明度的颜色按透明度变暗
@@ -35,6 +38,7 @@ function start() {
   document.documentElement.classList.add("has-bg");
 
   const colors = PALETTE.map((c) => rgb(`var(--c-${c})`));
+  const pools = { now: BLUES.map((c) => rgb(`var(${c})`)), history: PINK.map((c) => rgb(`var(${c})`)) };
   const grid = document.createElement("canvas"); // 网格只在尺寸变化时重画
   let w = 0;
   let hgt = 0;
@@ -85,7 +89,7 @@ function start() {
       dir: horizontal ? { x: sign, y: 0 } : { x: 0, y: sign },
       speed: rand(70, 170),
       len: rand(120, 260),
-      color: colors[Math.floor(Math.random() * colors.length)],
+      color: ((pool) => pool[Math.floor(Math.random() * pool.length)])(pools[document.documentElement.dataset.view] || colors),
       done: 0,
     });
   };
@@ -228,7 +232,10 @@ function tintCards() {
       const area = r.width * r.height;
       if (area > 0) score.set(css, (score.get(css) || 0) + area);
     }
-    const best = [...score].sort((a, b) => b[1] - a[1])[0]?.[0] || `var(--c-${PALETTE[index % PALETTE.length]})`;
+    let fallback = PALETTE[index % PALETTE.length];
+    // 历史视图的强调色是粉色（见 style.css），默认色不轮到橙、黄
+    if ((fallback === "music" || fallback === "eat") && card.closest("#view-history")) fallback = "video";
+    const best = [...score].sort((a, b) => b[1] - a[1])[0]?.[0] || `var(--c-${fallback})`;
     card.setAttribute("data-auto-hue", "");
     if (card.style.getPropertyValue("--hue").trim() !== best) card.style.setProperty("--hue", best);
   });

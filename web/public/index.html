@@ -6,7 +6,8 @@
   <title>Now · Ignat</title>
   <meta name="description" content="Ignat 此刻大致在做什么">
   <meta name="theme-color" content="#07070C">
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.png" type="image/png" sizes="64x64">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="preload" href="/fonts/vt323.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/pages.css">
@@ -14,6 +15,11 @@
   <script>document.documentElement.dataset.view = /^\/history\/?$/.test(location.pathname) ? "history" : "now";</script>
 </head>
 <body>
+  <!-- 两个视图各一张立绘，固定在背景网格上面、内容下面（见 style.css 的 .mascot） -->
+  <div class="mascots" aria-hidden="true">
+    <span class="mascot" data-for="now"><img src="/art/now.webp" alt="" width="960" height="960" decoding="async"></span>
+    <span class="mascot" data-for="history"><img src="/art/history.webp" alt="" width="960" height="960" decoding="async" fetchpriority="low"></span>
+  </div>
   <main class="wrap">
     <header class="top">
       <nav class="tabs" aria-label="页面">
@@ -39,7 +45,7 @@
           <ul class="tiles" id="side"></ul>
         </section>
 
-        <section class="today" aria-label="今日">
+        <section class="today" aria-label="今日" style="--hue: var(--bl-violet)">
           <div class="today-head">
             <h2>今日</h2>
             <span id="today-date"></span>
@@ -52,9 +58,9 @@
 
       <div class="view" id="view-history">
         <p class="notice" id="history-notice" hidden>状态服务暂时离线，稍后再来看看。</p>
-        <a class="panel detail-link" href="/me/" style="--hue: var(--paper)">详细历史<small>完整时间线、播放和浏览记录、专注度</small><b aria-hidden="true">→</b></a>
+        <a class="panel detail-link" href="/me/" style="--hue: var(--pk-blush)">详细历史<small>完整时间线、播放和浏览记录、专注度</small><b aria-hidden="true">→</b></a>
 
-        <section class="panel" aria-labelledby="heat-h" style="--hue: var(--c-research)">
+        <section class="panel" aria-labelledby="heat-h" style="--hue: var(--pk-hot)">
           <div class="panel-head">
             <h2 id="heat-h">正事</h2>
             <span id="heat-sum"></span>
@@ -64,7 +70,7 @@
           <div class="heat-legend" id="heat-legend"></div>
         </section>
 
-        <section class="panel" aria-labelledby="day-h">
+        <section class="panel" aria-labelledby="day-h" style="--hue: var(--pk-orchid)">
           <div class="panel-head">
             <h2 id="day-h">这一天</h2>
             <span class="day-nav">
@@ -78,7 +84,7 @@
           <ul class="totals" id="day-totals"></ul>
         </section>
 
-        <section class="panel" aria-labelledby="trend-h" style="--hue: var(--c-class)">
+        <section class="panel" aria-labelledby="trend-h" style="--hue: var(--pk-rose)">
           <div class="panel-head">
             <h2 id="trend-h">趋势</h2>
             <span class="seg" role="group" aria-label="按周或按月">
@@ -91,11 +97,11 @@
         </section>
 
         <div class="two">
-          <section class="panel" aria-labelledby="games-h">
+          <section class="panel" aria-labelledby="games-h" style="--hue: var(--pk-orchid)">
             <div class="panel-head"><h2 id="games-h">游戏</h2><span>半年内</span></div>
             <ol class="rank" id="games"></ol>
           </section>
-          <section class="panel" aria-labelledby="music-h">
+          <section class="panel" aria-labelledby="music-h" style="--hue: var(--pk-hot)">
             <div class="panel-head"><h2 id="music-h">听歌</h2><span>半年内</span></div>
             <ol class="rank" id="music"></ol>
           </section>

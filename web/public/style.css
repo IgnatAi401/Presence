@@ -49,6 +49,25 @@
   --c-away: rgba(236, 234, 245, 0.35);
   --c-offline: rgba(236, 234, 245, 0.2);
 }
+/* 历史视图的界面配色跟立绘一样走粉色系（类别颜色照旧，和图例对得上）：
+   各面板一种粉、提示文字和焦点框、背景里跑的光都从这几种里取 */
+:root {
+  --pk-hot: #FF4FD8;
+  --pk-rose: #FF6B9D;
+  --pk-orchid: #D27BFF;
+  --pk-blush: #FFB8DE;
+}
+html[data-view="history"] { --amber: var(--pk-hot); }
+/* 此刻视图同理走蓝色系（跟蓝色立绘配）：卡片颜色由 app.js 的 cardHue 映射到这几种蓝，
+   摸鱼、离线提示和背景里的光也用蓝色系；时间线色块和图例照旧用类别颜色 */
+:root {
+  --bl-cyan: #2FD8FF;
+  --bl-blue: #5C9DFF;
+  --bl-indigo: #7F8CFF;
+  --bl-violet: #A07CFF;
+  --bl-ice: #9FDFFF;
+}
+html[data-view="now"] { --amber: var(--bl-ice); }
 
 * { box-sizing: border-box; }
 
@@ -129,7 +148,7 @@ a { color: inherit; }
 }
 /* 两个页面各一种霓虹色，当前页亮起来 */
 .tabs a:nth-child(1) { --hue: var(--c-dev); }
-.tabs a:nth-child(2) { --hue: var(--c-out); }
+.tabs a:nth-child(2) { --hue: var(--c-video); }
 .tabs a:hover { color: var(--hue); }
 .tabs a[aria-current="page"] {
   color: var(--hue);
@@ -582,6 +601,105 @@ html[data-dir="back"]::view-transition-new(views) { animation-name: view-in-back
 @keyframes view-in { from { opacity: 0; transform: translate3d(20px, 0, 0); } }
 @keyframes view-out-back { to { opacity: 0; transform: translate3d(16px, 0, 0); } }
 @keyframes view-in-back { from { opacity: 0; transform: translate3d(-20px, 0, 0); } }
+
+/* 立绘：固定在背景里，此刻在右下、历史在左下，只显示当前视图那张。
+   融进背景：压暗降饱和、边缘红蓝错位描边加一圈霓虹光、身后一团同色光晕，
+   靠内容和底部的一侧渐隐；扫描线（body::after）照样盖在上面。平时慢慢上下浮，隔一阵闪一下细条错位的故障 */
+.mascots { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.mascot {
+  --h: min(90vh, 960px);
+  position: absolute;
+  bottom: -6vh;
+  width: var(--h);
+  height: var(--h);
+  opacity: 0;
+  transform: translate3d(var(--from, 40px), 12px, 0) scale(0.97);
+  transition: opacity 0.7s ease, transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.mascot[data-for="now"] { --hue: var(--c-dev); --from: 48px; right: calc(var(--h) * -0.2); }
+.mascot[data-for="history"] { --hue: var(--c-video); --from: -48px; left: calc(var(--h) * -0.2); }
+html:not([data-view="history"]) .mascot[data-for="now"],
+html[data-view="history"] .mascot[data-for="history"] { opacity: var(--show, 0.62); transform: none; }
+/* 身后的光晕（radial 本身已经够软，不再加模糊） */
+.mascot {
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--hue) 30%, transparent), transparent) center 60% / 80% 82% no-repeat;
+  animation: mascot-float 7s ease-in-out infinite alternate;
+}
+.mascot[data-for="now"] { --art: url("/art/now.webp"); }
+.mascot[data-for="history"] { --art: url("/art/history.webp"); --fade: to left; animation-delay: -3.5s; }
+@keyframes mascot-float { to { translate: 0 -14px; } }
+/* 靠内容的一侧和底部渐隐 */
+.mascot img, .mascot::before, .mascot::after {
+  --edge: linear-gradient(to top, transparent 2%, #000 34%), linear-gradient(var(--fade, to right), transparent 4%, #000 52%);
+  mask-image: var(--edge);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+.mascot img {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter:
+    saturate(0.85) brightness(0.76)
+    drop-shadow(2px 0 0 rgba(255, 79, 216, 0.45))
+    drop-shadow(-2px 0 0 rgba(47, 216, 255, 0.45))
+    drop-shadow(0 0 18px color-mix(in srgb, var(--hue) 55%, transparent));
+  animation: mascot-jitter 9s steps(1) infinite;
+}
+/* 故障：原图不动，上面叠两层同一张图，用两组疏密不同的横条遮罩切成很多细条（1–3px 一条、一簇一簇），
+   一层带粉边往左错、一层带青边往右错；每一步挪一下遮罩，细条的位置跟着换 */
+.mascot::before, .mascot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--art) center / contain no-repeat;
+  opacity: 0;
+  mask-image: var(--edge), var(--fine), var(--coarse);
+  animation: mascot-slice-a 9s steps(1) infinite;
+}
+.mascot::before {
+  --fine: repeating-linear-gradient(#000 0 2px, transparent 2px 5px);
+  --coarse: repeating-linear-gradient(#000 0 14px, transparent 14px 37px, #000 37px 45px, transparent 45px 71px);
+  filter: saturate(1.3) brightness(0.95) drop-shadow(3px 0 0 rgba(255, 79, 216, 0.7));
+}
+.mascot::after {
+  --fine: repeating-linear-gradient(#000 0 1px, transparent 1px 4px, #000 4px 7px, transparent 7px 9px);
+  --coarse: repeating-linear-gradient(transparent 0 19px, #000 19px 31px, transparent 31px 52px, #000 52px 58px, transparent 58px 83px);
+  filter: saturate(1.3) brightness(0.95) drop-shadow(-3px 0 0 rgba(47, 216, 255, 0.7));
+  animation-name: mascot-slice-b;
+}
+.mascot[data-for="history"] img, .mascot[data-for="history"]::before, .mascot[data-for="history"]::after { animation-delay: -4s; }
+/* 9 秒里只有最后零点几秒在闪 */
+@keyframes mascot-jitter {
+  0%, 94%, 96.6%, 100% { transform: none; }
+  94.3% { transform: translateX(-1.5px); }
+  95.1% { transform: translateX(1px); }
+  95.9% { transform: translateX(-1px); }
+}
+@keyframes mascot-slice-a {
+  0%, 94%, 96.6%, 100% { opacity: 0; transform: none; }
+  94.2% { opacity: 1; transform: translateX(-5px); mask-position: 0 0, 0 0, 0 0, 0 0; }
+  94.6% { transform: translateX(-9px); mask-position: 0 0, 0 0, 0 1px, 0 -120px; }
+  95.0% { transform: translateX(-3px); mask-position: 0 0, 0 0, 0 3px, 0 -290px; }
+  95.4% { transform: translateX(-7px); mask-position: 0 0, 0 0, 0 2px, 0 -455px; }
+  95.8% { transform: translateX(-4px); mask-position: 0 0, 0 0, 0 4px, 0 -610px; }
+  96.2% { transform: translateX(-2px); mask-position: 0 0, 0 0, 0 1px, 0 -770px; }
+}
+@keyframes mascot-slice-b {
+  0%, 94%, 96.6%, 100% { opacity: 0; transform: none; }
+  94.4% { opacity: 1; transform: translateX(6px); mask-position: 0 0, 0 0, 0 0, 0 0; }
+  94.8% { transform: translateX(3px); mask-position: 0 0, 0 0, 0 2px, 0 170px; }
+  95.2% { transform: translateX(8px); mask-position: 0 0, 0 0, 0 5px, 0 330px; }
+  95.6% { transform: translateX(4px); mask-position: 0 0, 0 0, 0 1px, 0 520px; }
+  96.0% { transform: translateX(6px); mask-position: 0 0, 0 0, 0 3px, 0 690px; }
+}
+/* 窄屏上立绘在卡片正后面：再淡一些，免得抢字 */
+@media (max-width: 1100px) { .mascot { --show: 0.32; } }
+@media (max-width: 640px) {
+  .mascot { --show: 0.22; --h: min(78vh, 560px); bottom: -2vh; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
