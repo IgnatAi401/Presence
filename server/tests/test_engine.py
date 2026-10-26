@@ -1,5 +1,6 @@
 """用模拟信号序列测试状态引擎（时间单位：秒，从 T0 开始）。"""
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -74,16 +75,26 @@ def test_first_activity_shows_immediately():
 
 
 def test_project_overrides_app_default():
-    s = Sim().mac(0, {**VSCODE, "project": "thesis-sim"}).snap(1)
+    s = Sim().mac(0, {**VSCODE, "project": "thesis-sim", "category": "research"}).snap(1)
     assert s.main.category == "research" and s.main.project == "thesis-sim"
     s = Sim().mac(0, {**VSCODE, "project": "unknown-proj"}).snap(1)
     assert s.main.category == "dev"
 
 
+def test_project_category_from_agent_and_rules():
+    rules = replace(RULES, projects={"thesis-sim": "research"})
+    assert rules.classify_desktop({**VSCODE, "project": "thesis-sim"}).category == "research"
+    # 小工具里选的优先于 rules.yaml
+    assert rules.classify_desktop({**VSCODE, "project": "thesis-sim", "category": "dev"}).category == "dev"
+    # 只接受科研 / 开发这类项目活动；没有项目名时不用
+    assert RULES.classify_desktop({**MATLAB, "project": "x", "category": "game"}).category == "research"
+    assert RULES.classify_desktop({**VSCODE, "category": "research"}).category == "dev"
+
+
 def test_project_shown_publicly_for_research_and_dev():
     s = Sim().mac(0, {**VSCODE, "project": "unknown-proj"}).snap(1)
     assert s.public()["main"]["detail"] == "unknown-proj" and "project" not in s.public()["main"]
-    s = Sim().manual(0, "office").mac(0, {**VSCODE, "project": "thesis-sim"}).snap(1)
+    s = Sim().manual(0, "office").mac(0, {**VSCODE, "project": "thesis-sim", "category": "research"}).snap(1)
     assert (s.main.category, s.main.detail) == ("office", "thesis-sim")
     assert "detail" not in Sim().mac(0, VSCODE).snap(1).public()["main"]
 

@@ -35,6 +35,11 @@ public struct ProjectMatcher: Sendable {
 
     public var count: Int { names.count }
 
+    /// 所有项目文件夹名，按名称排序（设置里列出来选分类）
+    public var allNames: [String] {
+        names.values.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
     private static let separators = [" — ", " – ", " - ", " | ", " · ", ": "]
 
     /// 从右往左找第一个和项目名完全一致的片段。

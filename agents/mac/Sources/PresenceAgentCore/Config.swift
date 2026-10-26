@@ -39,6 +39,8 @@ public struct AgentConfig: Codable, Equatable, Sendable {
     public var agentActiveSec: Double = 1800
     /// 不公开具体内容的网站（子域名自动包含）：不上报域名、标题和视频，网页上只显示“网上冲浪”
     public var hiddenDomains: [String] = []
+    /// 项目文件夹名 → 活动类别（research 科研 / dev 开发）；没列出的项目由服务器按 App 判断
+    public var projectCategories: [String: String] = [:]
 
     public init() {}
 
@@ -57,6 +59,8 @@ public struct AgentConfig: Codable, Equatable, Sendable {
         agentApps = try c.decodeIfPresent([String: String].self, forKey: .agentApps) ?? d.agentApps
         agentActiveSec = try c.decodeIfPresent(Double.self, forKey: .agentActiveSec) ?? d.agentActiveSec
         hiddenDomains = try c.decodeIfPresent([String].self, forKey: .hiddenDomains) ?? d.hiddenDomains
+        projectCategories = try c.decodeIfPresent([String: String].self, forKey: .projectCategories)
+            ?? d.projectCategories
     }
 
     public var signalURL: URL? { endpoint("signal") }

@@ -19,7 +19,7 @@ scripts/start.sh                                        # 监听 127.0.0.1:8790�
 uv run pytest                                           # 测试
 ```
 
-- 分类规则和活动等级：`server/config/rules.yaml`，改完重启即可。
+- 分类规则和活动等级：`server/config/rules.yaml`，改完重启即可。哪个项目算科研、哪个算开发在 Mac 小工具的 设置 → 项目 里选，随信号上报，优先于 `rules.yaml`。
 - 读取课表需要日历权限，先单独运行一次，在弹窗里允许：`uv run python -m presence.sources.calendar 课程表`
 - 接口：`/presence/api/signal`、`PUT media/{sha256}`（设备令牌）、`media/{sha256}`（封面图片，存在 `data/media/`）、`now`、`stream`（SSE）、`today`、`health`。
 

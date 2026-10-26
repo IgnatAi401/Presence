@@ -86,14 +86,21 @@ class Rules:
         return None
 
     def classify_desktop(self, data: dict) -> Classified | None:
-        """按 项目 → 域名 → App 默认值 的顺序匹配；都未命中返回 None（沿用上一个活动）。"""
+        """按 项目 → 域名 → App 默认值 的顺序匹配；都未命中返回 None（沿用上一个活动）。
+
+        项目的分类优先用小工具设置里选的（data.category），只接受公开显示项目名的活动（科研 / 开发）；
+        没选时再查 rules.yaml 的 projects。
+        """
         project = data.get("project") or None
+        chosen = data.get("category") or None
         domain = (data.get("domain") or "").lower() or None
         bundle = data.get("bundle_id") or ""
 
         if data.get("private") or data.get("hidden"):
             return Classified("browse")  # 私有网站公开状态只算上网，不按具体域名分类
 
+        if project and chosen and (a := self.activities.get(chosen)) and a.show_project:
+            return Classified(chosen, project=project)
         if project and project in self.projects:
             return Classified(self.projects[project], project=project)
         if domain:

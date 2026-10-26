@@ -55,6 +55,8 @@ public struct DesktopState: Equatable, Sendable {
     public var bundleId: String
     public var app: String
     public var project: String?
+    /// 设置里给这个项目选的类别（research / dev），服务器优先按它分类
+    public var category: String?
     public var domain: String?
     /// Safari 当前网页的标题（最多 200 字）
     public var title: String?
@@ -63,11 +65,12 @@ public struct DesktopState: Equatable, Sendable {
     public var idleSec: Double
     public var locked: Bool
 
-    public init(bundleId: String, app: String, project: String? = nil, domain: String? = nil, title: String? = nil,
-                hidden: Bool = false, idleSec: Double = 0, locked: Bool = false) {
+    public init(bundleId: String, app: String, project: String? = nil, category: String? = nil, domain: String? = nil,
+                title: String? = nil, hidden: Bool = false, idleSec: Double = 0, locked: Bool = false) {
         self.bundleId = bundleId
         self.app = app
         self.project = project
+        self.category = category
         self.domain = domain
         self.title = title.map { String($0.prefix(200)) }
         self.hidden = hidden
@@ -77,7 +80,7 @@ public struct DesktopState: Equatable, Sendable {
 
     /// 用来判断“有没有变化”：空闲秒数本身不算，只看是否越过离开阈值。
     public func changeKey(awaySec: Double) -> String {
-        [bundleId, project ?? "", domain ?? "", title ?? "", hidden ? "hidden" : "", locked ? "locked" : "",
+        [bundleId, project ?? "", category ?? "", domain ?? "", title ?? "", hidden ? "hidden" : "", locked ? "locked" : "",
          idleSec >= awaySec ? "away" : ""]
             .joined(separator: "|")
     }
@@ -88,7 +91,10 @@ public struct DesktopState: Equatable, Sendable {
             "app": .string(app),
             "idle_sec": .number(idleSec.rounded()),
         ]
-        if let project { data["project"] = .string(project) }
+        if let project {
+            data["project"] = .string(project)
+            if let category { data["category"] = .string(category) }
+        }
         if let domain { data["domain"] = .string(domain) }
         if let title, !title.isEmpty { data["title"] = .string(String(title.prefix(200))) }
         if hidden {

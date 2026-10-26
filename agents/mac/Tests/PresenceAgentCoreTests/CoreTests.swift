@@ -65,6 +65,14 @@ import Testing
         #expect(data["idle_sec"] as? Double == 3)
         #expect(data["domain"] == nil)
         #expect(data["locked"] == nil)
+        #expect(data["category"] == nil)
+    }
+
+    @Test func projectCategoryOnlyWithProject() {
+        var s = DesktopState(bundleId: "com.microsoft.VSCode", app: "Code", project: "thesis", category: "research")
+        #expect(s.signal(ts: 0, ttl: 300).data["category"] == .string("research"))
+        s.project = nil
+        #expect(s.signal(ts: 0, ttl: 300).data["category"] == nil)
     }
 
     @Test func policySendsOnChangeAndHeartbeat() {
@@ -106,7 +114,14 @@ import Testing
         let c = try JSONDecoder().decode(AgentConfig.self, from: Data(#"{"token":"abc"}"#.utf8))
         #expect(c.token == "abc")
         #expect(c.heartbeatSec == 120)
+        #expect(c.projectCategories.isEmpty)
         #expect(c.signalURL?.absoluteString == "https://api.ignat.ai/presence/api/signal")
+    }
+}
+
+@Suite struct ProjectNamesTests {
+    @Test func allNamesSorted() {
+        #expect(ProjectMatcher(names: ["b-proj", "Apex", "a10", "a9"]).allNames == ["a9", "a10", "Apex", "b-proj"])
     }
 }
 

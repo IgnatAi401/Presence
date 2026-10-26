@@ -34,6 +34,8 @@ scripts/build-app.sh --install    # 构建并安装到 ~/Applications/Presence.a
 4. 打开“音乐”时会询问“Presence 想要控制‘音乐’” → 允许。不小心点了不允许：系统设置 → 隐私与安全性 → 自动化 → Presence，打开“音乐”。
 5. 菜单栏图标 → 设置…，填写接口地址和设备令牌（服务器 `settings.toml` 里 `[devices]` 的 `mac`）。
 
+设置窗口分四页：通用（上报状态、服务器和令牌）、项目（每个项目文件夹算科研 / 开发 / 按 App 判断，存为 `projectCategories`，上报时带上 `category`）、隐私（不公开的网站）、权限。
+
 配置保存在 `~/Library/Application Support/PresenceAgent/config.json`（权限 600）。其中 `projectRoots`、`titleApps`、`agentApps`、`agentActiveSec`、
 `heartbeatSec` 等可以手动修改，重启小工具生效。
 

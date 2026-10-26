@@ -21,7 +21,8 @@ final class AgentModel: ObservableObject {
     @Published private(set) var music: MusicState?
     /// Safari 里正在看的 B站 / YouTube 视频（没在看时为 nil）
     @Published private(set) var video: VideoState?
-    @Published private(set) var projectCount = 0
+    /// 扫描到的项目文件夹名（设置里选分类用）
+    @Published private(set) var projectNames: [String] = []
     /// 最新生成的一条信号，以及最新送达服务器的一条
     @Published private(set) var lastSignal: Signal?
     @Published private(set) var lastDelivered: Signal?
@@ -65,6 +66,10 @@ final class AgentModel: ObservableObject {
     var paused: Bool { pausedUntil.map { $0 > Date() } ?? false }
     var locked: Bool { screenLocked || asleep || displayAsleep }
     var configured: Bool { config.signalURL != nil && !config.token.isEmpty }
+    /// 设置里“权限”页列出的、已检测到没开的权限数量
+    var missingPermissions: Int {
+        [!accessibilityOK, safariDenied, videoBlocked, musicDenied].filter { $0 }.count
+    }
 
     // MARK: 启动与系统通知
 
@@ -141,6 +146,7 @@ final class AgentModel: ObservableObject {
             if state.project == nil, let tool = config.agentApps[front.bundleId] {
                 state.project = agentProject(tool: tool, pid: front.pid, windowTitle: title)
             }
+            state.category = state.project.flatMap { config.projectCategories[$0] }
             if front.bundleId == SystemProbe.safariBundleId {
                 switch SystemProbe.safariPage() {
                 case let .page(url, title):
@@ -156,6 +162,7 @@ final class AgentModel: ObservableObject {
         } else if let prev = current, prev.bundleId == state.bundleId {
             // 离开期间沿用之前识别到的项目和网站
             state.project = prev.project
+            state.category = prev.project.flatMap { config.projectCategories[$0] }
             state.domain = prev.domain
             state.title = prev.title
             state.hidden = prev.hidden
@@ -248,7 +255,7 @@ final class AgentModel: ObservableObject {
         if Date().timeIntervalSince(matcherScannedAt) > 300 {
             matcher = ProjectMatcher.scan(roots: config.projectRoots)
             matcherScannedAt = Date()
-            projectCount = matcher.count
+            projectNames = matcher.allNames
         }
         return matcher
     }
@@ -326,11 +333,34 @@ final class AgentModel: ObservableObject {
         sampleVideo()
     }
 
-    func save(server: String, token: String, hiddenDomains: String) throws {
+    func saveConnection(server: String, token: String) throws {
         var next = config
         next.server = server.trimmingCharacters(in: .whitespacesAndNewlines)
         next.token = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        next.hiddenDomains = AgentConfig.parseDomains(hiddenDomains)
+        try apply(next)
+    }
+
+    /// 不公开的网站在设置里增删后立即保存
+    func setHiddenDomains(_ domains: [String]) throws {
+        var next = config
+        next.hiddenDomains = domains
+        try apply(next)
+    }
+
+    /// 给项目选类别（research / dev）；nil 表示交给服务器按 App 判断
+    func setProjectCategory(_ project: String, _ category: String?) throws {
+        var next = config
+        next.projectCategories[project] = category
+        try apply(next)
+    }
+
+    /// 重新扫描项目文件夹（新建文件夹后在设置里点“刷新”）
+    func rescanProjects() {
+        matcherScannedAt = .distantPast
+        _ = projectMatcher()
+    }
+
+    private func apply(_ next: AgentConfig) throws {
         try ConfigStore.save(next)
         config = next
         matcherScannedAt = .distantPast
