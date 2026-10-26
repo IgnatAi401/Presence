@@ -11,24 +11,28 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <main class="wrap">
+  <main class="wrap home">
     <header class="top">
-      <a class="brand" href="https://ignat.ai">ignat.ai</a>
-      <span class="sep">/</span>
-      <span class="ch">now.</span>
+      <nav class="tabs" aria-label="页面">
+        <a href="/" aria-current="page">此刻</a>
+        <a href="/history">历史</a>
+        <a href="/me">详细历史</a>
+      </nav>
       <span class="air" id="air" data-state="connecting"><i></i><b id="air-text">TUNING</b></span>
     </header>
 
-    <section class="screen" aria-live="polite">
-      <p class="kicker" id="kicker">此刻</p>
-      <h1 class="main" id="main-label">……</h1>
-      <p class="meta" id="main-meta"></p>
-      <div id="main-card"></div>
-      <p class="notice" id="notice" hidden>状态服务暂时离线，稍后会自动重连。</p>
+    <section class="hero" aria-live="polite">
+      <div class="hero-text">
+        <p class="kicker"><span id="kicker">此刻</span><span class="clock" id="clock"></span></p>
+        <h1 class="main" id="main-label">……</h1>
+        <p class="meta" id="main-meta"></p>
+        <p class="notice" id="notice" hidden>状态服务暂时离线，稍后会自动重连。</p>
+      </div>
+      <div class="hero-card" id="main-card"></div>
     </section>
 
-    <section class="side" aria-label="伴随状态">
-      <ul id="side"></ul>
+    <section class="side" id="side-wrap" aria-label="同时在做的事" hidden>
+      <ul class="tiles" id="side"></ul>
     </section>
 
     <section class="today" aria-label="今日">
@@ -41,11 +45,8 @@
       <ul class="totals" id="totals"></ul>
     </section>
 
-    <footer class="foot">
-      <a href="/history">历史</a>
-      <span>数据来自我的 Mac、Windows 和 iPhone，只显示大致类别</span>
-    </footer>
   </main>
+  <script src="/bg.js" type="module"></script>
   <script src="/app.js" type="module"></script>
 </body>
 </html>

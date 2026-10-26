@@ -773,6 +773,7 @@ class Engine:
         if anchors:
             main, side = anchors[0], anchors[1:] + acts
             self._fold(main, side)
+            self._slack(main, side)
         elif acts:
             main, side = acts[0], acts[1:]
         else:
@@ -795,6 +796,17 @@ class Engine:
         main.slacking_since = it.slacking_since
         main.project = it.project
         main.detail = it.detail
+
+    def _slack(self, main: Item, side: list[Item]) -> None:
+        """上课、在办公室时同时在刷手机、玩游戏等（rules.yaml 里锚定状态的 slack）也算摸鱼，从开始做那件事算起。"""
+        d = self.rules.anchors.get(main.category)
+        if not d or not d.slack:
+            return
+        starts = [max(i.since or main.since or 0, main.since or 0)
+                  for i in side if i.type == ACTIVITY and i.category in d.slack]
+        if starts:
+            since = min(starts)
+            main.slacking_since = since if main.slacking_since is None else min(main.slacking_since, since)
 
     def _feed_item(self, f: Feed) -> Item:
         d = f.data

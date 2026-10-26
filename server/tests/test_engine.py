@@ -375,7 +375,24 @@ def test_office_folds_research_and_lists_dev():
     assert cats(s) == ("office", []) and s.main.label == "在办公室搞科研"
     assert s.main.activity == "research" and s.main.since == T0
     sim.mac(100, VSCODE)
-    assert cats(sim.snap(110)) == ("office", ["dev"])
+    s = sim.snap(110)
+    assert cats(s) == ("office", ["dev"]) and s.main.slacking_since == T0 + 100  # 在办公室搞开发也算摸鱼
+
+
+def test_class_shows_slacking_when_gaming_or_on_phone():
+    sim = Sim()
+    sim.e.set_courses([course(0, 3000)], T0)
+    sim.e.ingest("iphone", "phone_app", T0 + 200, 1800, {"app": "小红书", "event": "open"})
+    s = sim.snap(210)
+    assert s.main.category == "class" and s.main.slacking_since == T0 + 200
+    assert s.public()["main"]["slacking"] == {"since": T0 + 200}
+
+
+def test_class_alone_is_not_slacking():
+    sim = Sim()
+    sim.e.set_courses([course(0, 3000)], T0)
+    s = sim.snap(10)
+    assert s.main.category == "class" and s.main.slacking_since is None
 
 
 def test_office_shows_slacking():

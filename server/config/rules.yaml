@@ -3,11 +3,12 @@
 # 锚定状态：rank 越小越优先（自定义锚定 > 上课 > 吃饭 / 睡觉 > 办公室）
 anchors:
   custom: { rank: 0, short: "自定义", label: "{text}" }
-  class: { rank: 1, short: "上课", label: "正在上《{course}》" }
+  # slack：处在这个状态时同时在做这些活动，主状态显示“摸鱼中”（只影响显示）
+  class: { rank: 1, short: "上课", label: "正在上《{course}》", slack: [research, dev, game, video, browse, phone] }
   eat: { rank: 2, short: "吃饭", label: "吃饭中" }
   sleep: { rank: 2, short: "睡觉", label: "睡觉中" }
   # activity：Mac 上正在做这件事时合并进主状态（不再单列），并显示它的今日时长
-  office: { rank: 3, short: "办公室", label: "在办公室搞科研", activity: research }
+  office: { rank: 3, short: "办公室", label: "在办公室搞科研", activity: research, slack: [dev, game, video, browse, phone] }
 
 # 活动：tier 越小等级越高；serious 表示“正事”（余温期间显示摸鱼标记）
 # keep_min：离开后在页面上继续保留多久（余温），只影响显示，不计入时长；

@@ -16,6 +16,7 @@ class AnchorDef:
     label: str
     short: str = ""
     activity: str | None = None  # 同类活动合并进这个锚定状态显示
+    slack: tuple[str, ...] = ()  # 处在这个状态时，同时在做这些活动就显示摸鱼
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,7 @@ class Rules:
                 if v.get("video"):
                     video_sites[v["video"]] = name
         return cls(
-            anchors={k: AnchorDef(**v) for k, v in raw.get("anchors", {}).items()},
+            anchors={k: AnchorDef(**{**v, "slack": tuple(v.get("slack") or ())}) for k, v in raw.get("anchors", {}).items()},
             activities={k: ActivityDef(**v) for k, v in raw.get("activities", {}).items()},
             domains=domains,
             apps=raw.get("apps") or {},

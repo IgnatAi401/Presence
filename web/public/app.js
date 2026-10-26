@@ -1,6 +1,7 @@
 // now.ignat.ai 公开状态页：先拉 /now 和 /today，再用 SSE 实时更新
 
-import { $, API, dur, getJSON, h, hue, mediaUrl, timelineBar, totalsList } from "./lib.js";
+import { $, API, clock, dur, getJSON, h, hue, mediaUrl, patch, timelineBar, totalsList } from "./lib.js";
+import { setBgHue } from "./bg.js";
 
 const KICKER = {
   anchor: "此刻",
@@ -8,7 +9,6 @@ const KICKER = {
   idle: "此刻",
 };
 // 类别简称、App 图标、网站和播放器的名字都由服务器按 rules.yaml 给出，这里不再另存一份
-const CARD_ROW = { music: "在听音乐", game: "在玩游戏" };
 
 let state = null; // 最近一次 /now
 let today = null; // 最近一次 /today
@@ -81,11 +81,11 @@ const badgeWidth = (text) => Math.ceil([...text].reduce((w, ch) => w + (ch.charC
 
 // 每秒重画时复用同一个封面节点：新建的图片要重新解码，会一闪一闪
 const covers = new Map();
-function coverNode(url, player, playerName) {
-  const key = `${url || ""}|${player || ""}`;
+function coverNode(url, player, playerName, cls = "cover") {
+  const key = `${cls}|${url || ""}|${player || ""}`;
   let el = covers.get(key);
   if (!el) {
-    el = h("div", { class: "cover", style: url ? { backgroundImage: `url("${encodeURI(mediaUrl(url))}")` } : {} },
+    el = h("div", { class: cls, style: url ? { backgroundImage: `url("${encodeURI(mediaUrl(url))}")` } : {} },
       player ? h("img", { class: `player ${player}`, src: `/icons/${player.replace("_", "-")}.svg`, alt: playerName, title: playerName }) : null);
     covers.set(key, el);
     if (covers.size > 50) covers.delete(covers.keys().next().value); // 只留最近建的 50 个
@@ -93,7 +93,8 @@ function coverNode(url, player, playerName) {
   return el;
 }
 
-function renderCard(item, t) {
+// inSide：伴随状态里的大卡片，右上角注明来源和连续时长（主状态的时长写在大字下面）
+function renderCard(item, t, inSide = false) {
   const c = item.card;
   if (!c) return null;
   const player = item.category === "music" ? c.player_name : null;
@@ -120,6 +121,7 @@ function renderCard(item, t) {
     const status = readingComments(c) ? "在看评论" : c.state === "paused" ? "已暂停" : null;
     sub = [c.owner || c.site_name, speed, status].filter(Boolean).join(" · ");
     href = c.url || null;
+    if (inSide && c.session_since) badge = [c.site_name, dur(sessionSec(c, t))].filter(Boolean).join(" · ");
   } else if (item.category === "game") {
     title = c.name || item.label;
     sub = `本次已玩 ${dur(t - (c.since || item.since))}`;
@@ -133,17 +135,30 @@ function renderCard(item, t) {
     pos != null ? h("div", { class: "times" }, h("span", {}, mmss(pos)), h("span", {}, mmss(c.duration))) : null,
   );
   const kind = web ? " web" : item.category === "music" ? "" : " wide";
-  const attrs = { class: `card${kind}`, "--hue": hue(item.category) };
+  const attrs = { class: `card${kind}${badge ? " has-badge" : ""}`, "--hue": hue(item.category),
+    "--badge-w": badge ? `${badgeWidth(badge)}px` : null };
+  const children = [cover, body, badge ? h("span", { class: "badge" }, badge) : null];
   return href
-    ? h("a", { ...attrs, href, target: "_blank", rel: "noopener" }, cover, body)
-    : h("div", { ...attrs, class: `${attrs.class}${badge ? " has-badge" : ""}`, "--badge-w": badge ? `${badgeWidth(badge)}px` : null }, cover, body,
-      badge ? h("span", { class: "badge" }, badge) : null);
+    ? h("a", { ...attrs, href, target: "_blank", rel: "noopener" }, ...children)
+    : h("div", attrs, ...children);
 }
 
+let bgKey = null;
 function renderMain(t) {
   const m = state.main;
-  const screen = document.querySelector(".screen");
-  screen.style.setProperty("--hue", m.type === "idle" ? "var(--dim)" : hue(m.category));
+  const hero = document.querySelector(".hero");
+  const color = m.type === "idle" ? "var(--dim)" : hue(m.category);
+  hero.style.setProperty("--hue", color);
+  // 有封面时在主状态背后铺一层模糊的封面
+  const art = m.card?.cover && m.card.kind !== "web" ? `url("${encodeURI(mediaUrl(m.card.cover))}")` : null;
+  if (art) hero.style.setProperty("--art", art);
+  else hero.style.removeProperty("--art");
+  const key = `${color}|${m.category}`;
+  if (key !== bgKey) {
+    bgKey = key;
+    setBgHue(color, m.category !== "offline");
+  }
+  $("clock").textContent = clock(t);
   $("kicker").textContent = m.category === "out" ? "出门走走" : m.type === "idle" ? (m.category === "offline" ? "OFFLINE" : "AWAY") : KICKER[m.type];
   const label = $("main-label");
   label.replaceChildren(...[phoneIcon(m, "main"), m.label].filter((child) => child != null));
@@ -157,28 +172,80 @@ function renderMain(t) {
   if (m.slacking) {
     meta.append(parts.length ? " · " : "", h("span", { class: "slack" }, `🐟 摸鱼中 ${dur(t - m.slacking.since)}`));
   }
-  $("main-card").replaceChildren(renderCard(m, t) || "");
+  patch($("main-card"), [renderCard(m, t)]);
   document.title = m.type === "idle" ? "Now · Ignat" : `${m.label} · Now`;
 }
 
+// 类别简称：/today 里带着服务器给的名字，还没拉到时先用标签
+const catName = (item) => today?.names?.[item.category] || item.label;
+
+// 伴随状态的一张小卡片：类别 · 时长 / 标题 / 副标题，左边缩略图，底边进度
+function renderTile(item, index, t) {
+  const c = item.card || {};
+  const time = item.category === "video" && c.session_since ? sessionSec(c, t)
+    : item.category === "music" && c.session_since ? sessionSec(c, t)
+    : item.since ? t - item.since : null;
+  let cat = catName(item);
+  let title = item.detail || item.label;
+  let sub = item.detail ? item.label : "";
+  let href = null;
+  let thumb = null;
+  let wide = false;
+  const paused = c.state === "paused" && !readingComments(c);
+  if (c.kind === "web") {
+    const site = c.domain.replace(/^www\./, "");
+    title = c.title || site;
+    sub = site;
+    href = `https://${c.domain}`;
+    if (c.cover) thumb = h("img", { class: "ic", src: mediaUrl(c.cover), alt: "", style: { width: "24px", height: "24px" } });
+  } else if (item.category === "music") {
+    cat = [cat, c.player_name].filter(Boolean).join(" · ");
+    title = c.title || item.label;
+    sub = [c.artist, c.album].filter(Boolean).join(" · ") + (paused ? " · 已暂停" : "");
+    thumb = coverNode(c.cover, c.player_name && c.player, c.player_name, "thumb");
+  } else if (item.category === "video") {
+    cat = [cat, c.site_name].filter(Boolean).join(" · ");
+    title = c.title || item.label;
+    const speed = c.rate && c.rate !== 1 ? `${c.rate}×` : null;
+    const status = readingComments(c) ? "在看评论" : paused ? "已暂停" : null;
+    sub = [c.owner, speed, status].filter(Boolean).join(" · ");
+    href = c.url || null;
+    if (c.cover) thumb = coverNode(c.cover, null, null, "thumb");
+    wide = Boolean(c.cover);
+  } else if (item.category === "game") {
+    title = c.name || item.label;
+    sub = "Steam";
+    href = c.appid ? `https://store.steampowered.com/app/${encodeURIComponent(c.appid)}` : null;
+  } else if (item.category === "phone") {
+    title = item.app || item.label;
+    sub = "iPhone";
+    thumb = phoneIcon(item, `side-${index}`);
+  }
+  if (item.slacking) sub = [sub, `🐟 摸鱼中 ${dur(t - item.slacking.since)}`].filter(Boolean).join(" · ");
+  if (!thumb?.classList.contains("thumb")) thumb = h("div", { class: "thumb" }, thumb || [...cat][0]);
+  const pos = c.duration ? position(c, t) : null;
+  const inner = [
+    thumb,
+    h("div", { class: "info" },
+      h("div", { class: "row" }, h("span", { class: "cat" }, cat), time != null ? h("span", { class: "time" }, dur(time)) : null),
+      h("div", { class: "ttl", title }, title),
+      sub ? h("div", { class: "sub", title: sub }, sub) : null),
+    pos != null ? h("i", { class: "prog", style: { width: `${((pos / c.duration) * 100).toFixed(2)}%` } }) : null,
+  ];
+  return h("li", { class: ["tile", wide && "wide", paused && "paused"].filter(Boolean).join(" "), "--hue": hue(item.category) },
+    href ? h("a", { class: "in", href, target: "_blank", rel: "noopener" }, ...inner) : h("div", { class: "in" }, ...inner));
+}
+
+// 音乐、视频用大卡片（封面、进度），排在最前面；其余是小卡片
+const isBig = (item) => ["music", "video"].includes(item.category) && item.card && item.card.kind !== "web";
+
 function renderSide(t) {
-  const list = $("side");
-  list.replaceChildren(...state.side.map((item, index) => {
-    const card = renderCard(item, t);
-    const sub = item.category === "phone" ? ["iPhone"] : [];
-    if (item.slacking) sub.push(`🐟 摸鱼中 ${dur(t - item.slacking.since)}`);
-    else if (item.card?.state === "paused" && !readingComments(item.card)) sub.push("已暂停");
-    else if (item.category === "video" && item.card?.session_since) sub.push(dur(sessionSec(item.card, t)));
-    else if (item.since && !item.card?.session_since) sub.push(dur(t - item.since));
-    // 有卡片时歌名、游戏名在卡片里，上面这行只写类别
-    const text = card ? CARD_ROW[item.category] || item.label
-      : item.detail ? `${item.detail} · ${item.label}` : item.label;
-    return h("li", { class: card ? "has-card" : null, "--hue": hue(item.category) },
-      h("span", { class: "lbl", title: text }, phoneIcon(item, `side-${index}`), text),
-      sub.length ? h("span", { class: "sub" }, sub.join(" · ")) : null,
-      card,
-    );
-  }));
+  $("side-wrap").hidden = !state.side.length;
+  const items = state.side.map((item, index) => ({ item, index }));
+  const ordered = [...items.filter(({ item }) => isBig(item)), ...items.filter(({ item }) => !isBig(item))];
+  patch($("side"), ordered.map(({ item, index }) => isBig(item)
+    ? h("li", { class: "tile big", "--hue": hue(item.category) }, renderCard(item, t, true))
+    : renderTile(item, index, t)));
 }
 
 function renderToday(t) {

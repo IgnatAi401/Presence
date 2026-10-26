@@ -14,11 +14,11 @@
 <body>
   <main class="wrap">
     <header class="top">
-      <a class="brand" href="https://ignat.ai">ignat.ai</a>
-      <span class="sep">/</span>
-      <a class="ch" href="/">now.</a>
-      <span class="sep">/</span>
-      <span>history</span>
+      <nav class="tabs" aria-label="页面">
+        <a href="/">此刻</a>
+        <a href="/history" aria-current="page">历史</a>
+        <a href="/me">详细历史</a>
+      </nav>
     </header>
 
     <p class="notice" id="notice" hidden>状态服务暂时离线，稍后再来看看。</p>
@@ -70,11 +70,8 @@
       </section>
     </div>
 
-    <footer class="foot">
-      <a href="/">此刻</a>
-      <span>只显示类别、课名、游戏和歌曲；项目、网站和视频不公开</span>
-    </footer>
   </main>
   <script src="/history/history.js" type="module"></script>
+  <script src="/bg.js" type="module"></script>
 </body>
 </html>

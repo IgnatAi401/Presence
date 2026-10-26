@@ -23,6 +23,36 @@ export function h(tag, attrs = {}, ...children) {
   return el;
 }
 
+// 把 parent 的子节点原地改成 next 的样子：结构相同的元素保留，只改属性和文字。
+// 每秒重画时卡片元素不被替换，鼠标泛光（data-lit、--spot-x/y）才不会一闪一闪
+const KEEP = ["--spot-x", "--spot-y"];
+function patchNode(a, b) {
+  if (a === b) return a;
+  if (a.nodeType !== b.nodeType || a.nodeName !== b.nodeName) {
+    a.replaceWith(b);
+    return b;
+  }
+  if (a.nodeType === Node.TEXT_NODE) {
+    if (a.data !== b.data) a.data = b.data;
+    return a;
+  }
+  const kept = KEEP.map((k) => a.style.getPropertyValue(k));
+  for (const { name } of [...a.attributes]) if (name !== "data-lit" && !b.hasAttribute(name)) a.removeAttribute(name);
+  for (const { name, value } of [...b.attributes]) if (a.getAttribute(name) !== value) a.setAttribute(name, value);
+  KEEP.forEach((k, i) => { if (kept[i]) a.style.setProperty(k, kept[i]); });
+  patch(a, [...b.childNodes]);
+  return a;
+}
+export function patch(parent, next) {
+  const old = [...parent.childNodes];
+  next = next.filter((n) => n != null).map((n) => (typeof n === "string" ? document.createTextNode(n) : n));
+  next.forEach((n, i) => {
+    if (i < old.length) patchNode(old[i], n);
+    else parent.append(n);
+  });
+  old.slice(next.length).forEach((n) => n.remove());
+}
+
 export function dur(sec) {
   sec = Math.max(0, Math.floor(sec));
   const hh = Math.floor(sec / 3600);

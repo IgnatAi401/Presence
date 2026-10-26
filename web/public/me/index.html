@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-glow="research">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -14,11 +14,12 @@
 <body>
   <main class="wrap">
     <header class="top">
-      <a class="brand" href="https://ignat.ai">ignat.ai</a>
-      <span class="sep">/</span>
-      <a class="ch" href="/">now.</a>
-      <span class="sep">/</span>
-      <span>me</span>
+      <nav class="tabs" aria-label="页面">
+        <a href="/">此刻</a>
+        <a href="/history">历史</a>
+        <a href="/me" aria-current="page">详细历史</a>
+      </nav>
+      <a class="logout" href="https://401.ignat.ai/">退出登录</a>
     </header>
 
     <!-- 页面本身不含数据；数据都要登录后从 api.ignat.ai 取 -->
@@ -99,12 +100,8 @@
 
     </div>
 
-    <footer class="foot">
-      <a href="/">此刻</a>
-      <a href="/history">历史</a>
-      <a href="https://401.ignat.ai/">退出登录</a>
-    </footer>
   </main>
   <script src="/me/me.js" type="module"></script>
+  <script src="/bg.js" type="module"></script>
 </body>
 </html>
