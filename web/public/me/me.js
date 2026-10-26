@@ -1,6 +1,6 @@
 // now.ignat.ai/me 私有回看页：数据都来自 /private/*（经 401.ignat.ai 登录），页面本身不含数据
 
-import { $, API, addDays, clock, dur, enableTips, getJSON, h, hue, rankList, totalsList } from "/lib.js";
+import { $, API, addDays, clock, dur, enableTips, getJSON, h, hue, pagedList, rankList, totalsList } from "/lib.js";
 
 const SITES = { bilibili: "B站", youtube: "YouTube" };
 const MEDIA_KIND = { video: "视频", music: "歌", game: "游戏", app: "手机" };
@@ -89,7 +89,7 @@ function logItem(start, end, what, extra) {
 }
 
 function renderLogs(d) {
-  const media = d.media.map((m) => {
+  pagedList($("media"), [...d.media].reverse(), (m) => {
     const title = m.title || (m.type === "video" ? m.key.split(":")[1] : m.key);
     const url = m.type === "video" ? videoUrl(m.key, m.page) : null;
     const sub = m.type === "video" ? [m.artist, SITES[m.player]].filter(Boolean).join(" · ")
@@ -99,13 +99,11 @@ function renderLogs(d) {
       url ? h("a", { href: url, target: "_blank", rel: "noopener", title }, title) : h("span", { title }, title),
       sub ? h("small", {}, sub) : null,
     ], dur(m.seconds));
-  });
-  $("media").replaceChildren(...(media.length ? media.reverse() : [h("li", { class: "empty" }, "这天没有播放记录")]));
-  const web = d.web.map((w) => logItem(w.start, w.end, [
+  }, "这天没有播放记录");
+  pagedList($("web"), [...d.web].reverse(), (w) => logItem(w.start, w.end, [
     h("a", { href: `https://${w.domain}`, target: "_blank", rel: "noopener" }, w.title || w.domain),
     h("small", {}, w.domain.replace(/^www\./, "") + (w.private ? " · 私密" : "")),
-  ], dur(w.end - w.start)));
-  $("web").replaceChildren(...(web.length ? web.reverse() : [h("li", { class: "empty" }, "这天没有浏览记录")]));
+  ], dur(w.end - w.start)), "这天没有浏览记录");
 }
 
 async function loadDay(date) {
@@ -130,10 +128,10 @@ async function loadFocus() {
   const worked = f.days.filter((d) => d.focus_sec > 0).length;
   const best = f.days.reduce((a, d) => (d.longest_sec > (a?.longest_sec || 0) ? d : a), null);
   $("focus-stats").replaceChildren(
-    stat("正事", dur(sum("focus_sec")), `${worked} 天有记录`),
-    stat("日均", dur(worked ? sum("focus_sec") / worked : 0), "按有记录的天算"),
-    stat("最长连续", dur(best?.longest_sec || 0), best ? `${best.date.slice(5)} ${clock(best.longest_start)} 开始` : "—"),
-    stat("被打断", `${sum("interruptions")} 次`, `摸鱼 ${dur(sum("slack_sec"))}`),
+    stat("正事", dur(sum("focus_sec")), `${worked} 天有记录`, "research"),
+    stat("日均", dur(worked ? sum("focus_sec") / worked : 0), "按有记录的天算", "dev"),
+    stat("最长连续", dur(best?.longest_sec || 0), best ? `${best.date.slice(5)} ${clock(best.longest_start)} 开始` : "—", "class"),
+    stat("被打断", `${sum("interruptions")} 次`, `摸鱼 ${dur(sum("slack_sec"))}`, "game"),
   );
   const max = Math.max(1, ...f.days.map((d) => d.focus_sec));
   $("focus-cols").style.setProperty("--hue", hue("research"));
@@ -144,8 +142,9 @@ async function loadFocus() {
   rankList($("channels"), f.channels.map((c) => ({ label: c.title, sub: names[c.category], value: c.seconds, hue: hue(c.category) })));
 }
 
-function stat(label, value, sub) {
-  return h("div", { class: "stat" }, h("small", {}, label), h("b", {}, value), h("span", {}, sub));
+// 每个统计格一个颜色
+function stat(label, value, sub, category) {
+  return h("div", { class: "stat", "--hue": hue(category) }, h("small", {}, label), h("b", {}, value), h("span", {}, sub));
 }
 
 async function loadSummary() {

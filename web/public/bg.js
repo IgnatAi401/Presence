@@ -1,114 +1,12 @@
-// 全站背景：WebGL 画缓慢流动的雾光。最多四个光源，颜色取自页面上当前看得见的主要几种颜色
-// （带 --hue 的元素按可见面积加权）；主光源在左上方，还会一圈圈扩散微弱的“电波”。
-// 主页用 setBgHue 指定主光源（当前状态的颜色），详细历史页固定绿色。
-// 不支持 WebGL 时退回 CSS 渐变，减少动态效果时只画静止的一帧
+// 全站背景：深色底上一张细网格，几道各类别颜色的霓虹光沿网格线跑，到路口时偶尔拐弯，像电路板里的信号。
+// 不再按页面取一个统一主题色：每张卡片用自己的颜色（见 tintCards）。
+// 画布不可用时退回 style.css 里的静态网格；减少动态效果时只画静止的一帧
 
-const VERT = `
-attribute vec2 a;
-void main() { gl_Position = vec4(a, 0.0, 1.0); }
-`;
+const GRID = 56; // 网格间距（CSS 像素），和 style.css 的静态网格一致
+const PALETTE = ["dev", "video", "research", "music", "class", "game", "phone", "eat"];
+const MAX_PULSES = 7;
 
-const FRAG = `
-// 必须用 highp：mediump 在苹果显卡上是 16 位浮点，开久了坐标变大，噪声会退化成满屏亮雾
-#ifdef GL_FRAGMENT_PRECISION_HIGH
-precision highp float;
-#else
-precision mediump float;
-#endif
-uniform vec2 uRes;
-uniform float uTime;
-uniform vec3 uC[4];
-uniform float uW[4];
-uniform float uLive;
-
-// 小乘数的哈希，输入先按 289 取模，数值始终很小
-float hash(vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.x + p3.y) * p3.z);
-}
-float cell(vec2 i) { return hash(mod(i, 289.0)); }
-float noise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(cell(i), cell(i + vec2(1.0, 0.0)), u.x),
-             mix(cell(i + vec2(0.0, 1.0)), cell(i + vec2(1.0, 1.0)), u.x), u.y);
-}
-float fbm(vec2 p) {
-  float v = 0.0;
-  float a = 0.5;
-  mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
-  for (int i = 0; i < 5; i++) {
-    v += a * noise(p);
-    p = m * p;
-    a *= 0.5;
-  }
-  return v;
-}
-
-// 光源位置（窗口里的比例，左下为原点）：主光源左上，其余分在右侧、左下、右上
-vec2 anchor(int i) {
-  if (i == 0) return vec2(0.28, 0.8);
-  if (i == 1) return vec2(0.9, 0.55);
-  if (i == 2) return vec2(0.1, 0.18);
-  return vec2(0.74, 0.06);
-}
-
-void main() {
-  vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
-  float t = uTime * 0.025;
-
-  // 两层域扭曲的噪声：像慢慢翻涌的烟和光
-  vec2 q = vec2(fbm(p * 1.3 + vec2(0.0, t)), fbm(p * 1.3 + vec2(5.2, -t)));
-  float n = fbm(p * 1.1 + 2.4 * q + vec2(t * 0.7, -t * 0.4));
-
-  vec3 col = vec3(0.043, 0.035, 0.031);
-  vec3 amber = vec3(1.0, 0.70, 0.42);
-
-  // 各光源的光按距离衰减叠加；local 是这一点附近的主导颜色
-  vec3 light = vec3(0.0);
-  float sum = 0.0;
-  float d0 = 0.0;
-  for (int i = 0; i < 4; i++) {
-    float fi = float(i);
-    vec2 c = anchor(i) + 0.05 * vec2(sin(uTime * 0.05 + fi * 1.7), cos(uTime * 0.04 + fi * 2.3));
-    vec2 cp = (c * uRes - 0.5 * uRes) / uRes.y;
-    float d = length((p - cp) * vec2(0.8, 1.0));
-    if (i == 0) d0 = d;
-    float g = exp(-d * d * 1.5) * uW[i];
-    light += uC[i] * g;
-    sum += g;
-  }
-  vec3 local = light / max(sum, 0.001);
-  float near = clamp(sum, 0.0, 1.2);
-
-  // 雾：颜色跟着最近的光源走，夹一点琥珀色；离光源越近越亮
-  float haze = smoothstep(0.45, 0.82, n);
-  vec3 tint = mix(local, amber, smoothstep(0.35, 0.75, q.y) * 0.25);
-  col += tint * haze * haze * (0.05 + 0.15 * near);
-  col += light * 0.05;
-  col += amber * pow(smoothstep(0.32, 0.62, q.x * n * 1.6), 2.0) * 0.03 * (1.0 - near);
-
-  // 电波：从主光源向外扩散，越远越淡；离线时不画
-  float wave = pow(0.5 + 0.5 * sin(d0 * 24.0 - uTime * 0.9 + n * 3.0), 36.0);
-  col += uC[0] * wave * exp(-d0 * 1.7) * smoothstep(0.08, 0.35, d0) * (0.08 + 0.12 * haze) * uLive * uW[0];
-
-  col *= 1.0 - 0.55 * smoothstep(0.35, 1.3, length(p * vec2(0.85, 1.1)));
-  col += (hash(gl_FragCoord.xy + fract(uTime * 7.0) * 61.0) - 0.5) * 0.012; // 抖动，避免暗部色带
-  gl_FragColor = vec4(col, 1.0);
-}
-`;
-
-const N = 4;
-const AMBER = [1, 0.7, 0.42];
-// 每个光源：颜色和强度；画面里的值每帧向目标慢慢靠拢
-const target = { colors: Array.from({ length: N }, () => AMBER.slice()), weights: [1, 0, 0, 0], live: 1 };
-const cur = { colors: target.colors.map((c) => c.slice()), weights: target.weights.slice(), live: 1 };
-let primary = null; // 指定的主光源颜色（CSS），没有就用页面上最多的颜色
-let draw = null;
-
-// CSS 颜色（可以是 var(...)）→ [r, g, b]，0–1；带透明度的颜色按透明度变暗
+// CSS 颜色（可以是 var(...)）→ [r, g, b]，0–255；带透明度的颜色按透明度变暗
 const probe = document.createElement("i");
 const rgbCache = new Map();
 function rgb(css) {
@@ -118,140 +16,232 @@ function rgb(css) {
   if (!probe.isConnected) { probe.hidden = true; document.body.append(probe); }
   const m = getComputedStyle(probe).color.match(/[\d.]+/g);
   const a = m && m[3] != null ? Number(m[3]) : 1;
-  const out = m ? m.slice(0, 3).map((v) => (Number(v) / 255) * a) : AMBER.slice();
+  const out = m ? m.slice(0, 3).map((v) => Number(v) * a) : [255, 179, 107];
   rgbCache.set(css, out);
   return out;
 }
-const chroma = (c) => Math.max(...c) - Math.min(...c);
-const close = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 0.18;
+const chroma = (c) => (Math.max(...c) - Math.min(...c)) / 255;
 
-// 看得见的带 --hue 元素按可见面积（单个最多算视口的 12%）给颜色加权，取最多的几种
-function pageColors() {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const cap = vw * vh * 0.12;
-  const score = new Map();
-  for (const el of document.querySelectorAll('[style*="--hue"]')) {
-    const css = el.style.getPropertyValue("--hue").trim();
-    if (!css) continue;
-    const r = el.getBoundingClientRect();
-    const w = Math.min(r.right, vw) - Math.max(r.left, 0);
-    const h = Math.min(r.bottom, vh) - Math.max(r.top, 0);
-    if (w <= 0 || h <= 0) continue;
-    score.set(css, (score.get(css) || 0) + Math.min(w * h, cap));
-  }
-  return [...score].sort((a, b) => b[1] - a[1]).map(([css, area]) => ({ css, c: rgb(css), area }));
-}
-
-function refresh() {
-  const found = pageColors();
-  const first = primary ? { css: primary, c: rgb(primary) } : found.find((f) => chroma(f.c) > 0.12) || { css: "var(--amber)", c: AMBER };
-  // 其余光源：有颜色感（不是灰色）、和已选的不太像
-  const picked = [first];
-  for (const f of found) {
-    if (picked.length >= N) break;
-    if (chroma(f.c) > 0.12 && !picked.some((p) => close(p.c, f.c))) picked.push(f);
-  }
-  const top = Math.max(1, ...picked.slice(1).map((f) => f.area));
-  picked.forEach((f, i) => {
-    target.colors[i] = f.c.slice();
-    target.weights[i] = i === 0 ? 1 : 0.45 + 0.4 * Math.sqrt(f.area / top);
-  });
-  for (let i = picked.length; i < N; i++) target.weights[i] = 0;
-  // 顶部导航的高亮用主光源的颜色
-  document.documentElement.style.setProperty("--glow", first.css);
-  draw?.();
-}
-let refreshTimer = 0;
-const queueRefresh = () => {
-  if (!refreshTimer) refreshTimer = setTimeout(() => { refreshTimer = 0; refresh(); }, 250);
-};
-
-export function setBgHue(css, live = true) {
-  primary = css;
-  target.live = live ? 1 : 0;
-  refresh();
-}
+let live = 1; // 离线时不再发出新的光
+export function setBgLive(on) { live = on ? 1 : 0; }
 
 function start() {
   const canvas = document.createElement("canvas");
   canvas.className = "bg";
   canvas.setAttribute("aria-hidden", "true");
-  const gl = canvas.getContext("webgl", { antialias: false, alpha: false, powerPreference: "low-power" });
-  if (!gl) return;
-
-  const shader = (type, src) => {
-    const s = gl.createShader(type);
-    gl.shaderSource(s, src);
-    gl.compileShader(s);
-    return gl.getShaderParameter(s, gl.COMPILE_STATUS) ? s : null;
-  };
-  const vs = shader(gl.VERTEX_SHADER, VERT);
-  const fs = shader(gl.FRAGMENT_SHADER, FRAG);
-  if (!vs || !fs) return;
-  const prog = gl.createProgram();
-  gl.attachShader(prog, vs);
-  gl.attachShader(prog, fs);
-  gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return;
-  gl.useProgram(prog);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(prog, "a");
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  const u = Object.fromEntries(["uRes", "uTime", "uC", "uW", "uLive"].map((k) => [k, gl.getUniformLocation(prog, k)]));
-
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
   document.body.prepend(canvas);
   document.documentElement.classList.add("has-bg");
 
-  // 画面很柔和，用一半分辨率就够，省电
+  const colors = PALETTE.map((c) => rgb(`var(--c-${c})`));
+  const grid = document.createElement("canvas"); // 网格只在尺寸变化时重画
+  let w = 0;
+  let hgt = 0;
+  let dpr = 1;
   const resize = () => {
-    const scale = Math.min(window.devicePixelRatio || 1, 2) * 0.5;
-    canvas.width = Math.max(1, Math.round(window.innerWidth * scale));
-    canvas.height = Math.max(1, Math.round(window.innerHeight * scale));
-    gl.viewport(0, 0, canvas.width, canvas.height);
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = window.innerWidth;
+    hgt = window.innerHeight;
+    for (const c of [canvas, grid]) {
+      c.width = Math.round(w * dpr);
+      c.height = Math.round(hgt * dpr);
+    }
+    const g = grid.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.fillStyle = "#07070C";
+    g.fillRect(0, 0, w, hgt);
+    g.strokeStyle = "rgba(236, 234, 245, 0.035)";
+    g.lineWidth = 1;
+    g.beginPath();
+    for (let x = 0.5; x < w; x += GRID) { g.moveTo(x, 0); g.lineTo(x, hgt); }
+    for (let y = 0.5; y < hgt; y += GRID) { g.moveTo(0, y); g.lineTo(w, y); }
+    g.stroke();
+    // 路口的小点
+    g.fillStyle = "rgba(236, 234, 245, 0.09)";
+    for (let x = 0.5; x < w; x += GRID) for (let y = 0.5; y < hgt; y += GRID) g.fillRect(x - 0.5, y - 0.5, 1.5, 1.5);
+    // 四角压暗，中间内容区更干净
+    const v = g.createRadialGradient(w / 2, hgt * 0.4, Math.min(w, hgt) * 0.2, w / 2, hgt / 2, Math.max(w, hgt) * 0.75);
+    v.addColorStop(0, "rgba(7, 7, 12, 0)");
+    v.addColorStop(1, "rgba(7, 7, 12, 0.7)");
+    g.fillStyle = v;
+    g.fillRect(0, 0, w, hgt);
   };
   resize();
-  window.addEventListener("resize", () => { resize(); queueRefresh(); });
+  window.addEventListener("resize", resize);
+
+  // 一道光：沿网格线走，pts 是走过的拐点（最后一个是光头）
+  const pulses = [];
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const spawn = () => {
+    const horizontal = Math.random() < 0.5;
+    const lines = Math.floor((horizontal ? hgt : w) / GRID);
+    const lane = (1 + Math.floor(Math.random() * Math.max(1, lines - 1))) * GRID + 0.5;
+    const sign = Math.random() < 0.5 ? 1 : -1;
+    const from = sign > 0 ? -40 : (horizontal ? w : hgt) + 40;
+    const head = horizontal ? { x: from, y: lane } : { x: lane, y: from };
+    pulses.push({
+      pts: [{ ...head }, head],
+      dir: horizontal ? { x: sign, y: 0 } : { x: 0, y: sign },
+      speed: rand(70, 170),
+      len: rand(120, 260),
+      color: colors[Math.floor(Math.random() * colors.length)],
+      done: 0,
+    });
+  };
+
+  const step = (p, dt) => {
+    const head = p.pts[p.pts.length - 1];
+    let left = p.speed * dt;
+    while (left > 0) {
+      // 到下一个路口的距离
+      const along = p.dir.x ? head.x : head.y;
+      const next = p.dir.x + p.dir.y > 0 ? Math.floor((along - 0.5) / GRID + 1) * GRID + 0.5 : Math.ceil((along - 0.5) / GRID - 1) * GRID + 0.5;
+      const gap = Math.abs(next - along);
+      if (gap > left) { head.x += p.dir.x * left; head.y += p.dir.y * left; break; }
+      head.x += p.dir.x * gap;
+      head.y += p.dir.y * gap;
+      left -= gap;
+      const inside = head.x > 0 && head.x < w && head.y > 0 && head.y < hgt;
+      if (inside && Math.random() < 0.16) {
+        const turn = Math.random() < 0.5 ? 1 : -1;
+        p.dir = { x: -p.dir.y * turn, y: p.dir.x * turn };
+        p.pts[p.pts.length - 1] = { x: head.x, y: head.y };
+        p.pts.push({ x: head.x, y: head.y });
+        return step(p, left / p.speed);
+      }
+    }
+    // 只留尾巴长度以内的拐点
+    let total = 0;
+    for (let i = p.pts.length - 1; i > 0; i--) {
+      total += Math.hypot(p.pts[i].x - p.pts[i - 1].x, p.pts[i].y - p.pts[i - 1].y);
+      if (total > p.len && i > 1) { p.pts.splice(0, i - 1); break; }
+    }
+    const margin = p.len + 40;
+    if (head.x < -margin || head.x > w + margin || head.y < -margin || head.y > hgt + margin) p.done = 1;
+  };
+
+  // 从光头往回画，越往后越淡：一层宽的晕、一层细的亮线，光头一个亮点
+  const drawPulse = (p) => {
+    const [r, g, b] = p.color;
+    let dist = 0;
+    for (let i = p.pts.length - 1; i > 0 && dist < p.len; i--) {
+      const a = p.pts[i];
+      const z = p.pts[i - 1];
+      const seg = Math.hypot(a.x - z.x, a.y - z.y);
+      if (!seg) continue;
+      const use = Math.min(seg, p.len - dist);
+      const ex = a.x + ((z.x - a.x) / seg) * use;
+      const ey = a.y + ((z.y - a.y) / seg) * use;
+      const a0 = 1 - dist / p.len;
+      const a1 = 1 - (dist + use) / p.len;
+      const grad = ctx.createLinearGradient(a.x, a.y, ex, ey);
+      grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${a0})`);
+      grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${a1})`);
+      ctx.strokeStyle = grad;
+      ctx.globalAlpha = 0.16;
+      ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(ex, ey); ctx.stroke();
+      dist += use;
+    }
+    const head = p.pts[p.pts.length - 1];
+    ctx.globalAlpha = 1;
+    const glow = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, 14);
+    glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.55)`);
+    glow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(head.x - 14, head.y - 14, 28, 28);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.fillRect(head.x - 1, head.y - 1, 2, 2);
+  };
+
+  const paint = () => {
+    if (!grid.width || !grid.height) return; // 窗口还没尺寸（后台标签页）
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    ctx.drawImage(grid, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+    for (const p of pulses) drawPulse(p);
+  };
 
   const still = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const t0 = performance.now();
-  let last = 0;
-  const frame = (now, settle) => {
-    const k = settle ? 1 : 0.03;
-    for (let i = 0; i < N; i++) {
-      for (let j = 0; j < 3; j++) cur.colors[i][j] += (target.colors[i][j] - cur.colors[i][j]) * k;
-      cur.weights[i] += (target.weights[i] - cur.weights[i]) * k;
+  // 静止画面：随便摆几道光
+  const freeze = () => {
+    pulses.length = 0;
+    for (let i = 0; i < 5; i++) {
+      spawn();
+      const p = pulses[i];
+      for (let k = 0; k < 40; k++) step(p, rand(0.05, 0.12));
+      if (p.done) pulses.pop();
     }
-    cur.live += (target.live - cur.live) * k;
-    gl.uniform2f(u.uRes, canvas.width, canvas.height);
-    gl.uniform1f(u.uTime, still.matches ? 40 : (now - t0) / 1000);
-    gl.uniform3fv(u.uC, cur.colors.flat());
-    gl.uniform1fv(u.uW, cur.weights);
-    gl.uniform1f(u.uLive, cur.live);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    paint();
   };
-  draw = () => { if (still.matches) frame(performance.now(), true); };
+
+  let last = 0;
+  let prev = 0;
+  let nextSpawn = 0;
   const loop = (now) => {
     requestAnimationFrame(loop);
-    if (still.matches || now - last < 33) return; // 约 30 帧
+    if (still.matches || document.hidden || now - last < 33) return; // 约 30 帧
     last = now;
-    frame(now, false);
+    const dt = Math.min(0.1, (now - (prev || now)) / 1000);
+    prev = now;
+    if (live && now > nextSpawn && pulses.length < MAX_PULSES) {
+      spawn();
+      nextSpawn = now + rand(500, 1600);
+    }
+    for (const p of pulses) step(p, dt);
+    for (let i = pulses.length - 1; i >= 0; i--) if (pulses[i].done) pulses.splice(i, 1);
+    paint();
   };
-  refresh();
-  frame(performance.now(), true);
+  // 一打开就有几道光在半路，不从空白开始
+  for (let i = 0; i < 4; i++) {
+    spawn();
+    for (let k = 0; k < 30 + i * 25; k++) step(pulses[i], 0.05);
+  }
+  if (still.matches) freeze();
+  else paint();
   requestAnimationFrame(loop);
-  still.addEventListener?.("change", () => draw());
-  // 页面内容变了、滚动到别处时重新挑颜色（主页每秒重画，但颜色没变时结果一样）
-  window.addEventListener("scroll", queueRefresh, { passive: true });
-  setInterval(refresh, 3000);
+  still.addEventListener?.("change", () => { if (still.matches) freeze(); });
+  window.addEventListener("resize", () => { if (still.matches) freeze(); });
+  document.addEventListener("visibilitychange", () => { prev = 0; });
 }
+
+// 每张卡片一个主题色：自己没写 --hue 的卡片（时间线、历史面板），
+// 按卡片里有颜色的东西（时间线色块、图例、排行条、柱子）的面积取最多的那种颜色；
+// 灰色（离开、离线）不算。什么颜色都没有时按卡片顺序轮流用调色板里的颜色
+const AUTO = ".today, .panel";
+function tintCards() {
+  document.querySelectorAll(AUTO).forEach((card, index) => {
+    if (card.style.getPropertyValue("--hue") && !card.hasAttribute("data-auto-hue")) return;
+    const score = new Map();
+    for (const el of card.querySelectorAll('[style*="--hue"]')) {
+      const css = el.style.getPropertyValue("--hue").trim();
+      if (!css || chroma(rgb(css)) < 0.15) continue;
+      const r = el.getBoundingClientRect();
+      const area = r.width * r.height;
+      if (area > 0) score.set(css, (score.get(css) || 0) + area);
+    }
+    const best = [...score].sort((a, b) => b[1] - a[1])[0]?.[0] || `var(--c-${PALETTE[index % PALETTE.length]})`;
+    card.setAttribute("data-auto-hue", "");
+    if (card.style.getPropertyValue("--hue").trim() !== best) card.style.setProperty("--hue", best);
+  });
+}
+let tintTimer = 0;
+const queueTint = () => {
+  if (!tintTimer) tintTimer = setTimeout(() => { tintTimer = 0; tintCards(); }, 200);
+};
 
 // 鼠标泛光（参照 personal_profile 的 lib/motion.ts）：只点亮鼠标所在的那张卡片（data-lit），
 // 光斑坐标相对卡片自身（--spot-x / --spot-y），每帧最多算一次；触屏和减少动态效果时不做
-const LIT = ".hero, .today, .tile > .in, .tile.big .card, .hero-card .card:not(.web), .panel";
+const LIT = ".hero, .today, .tile > .in, .tile.big .card, .hero-card .card:not(.web), .panel, .stat";
+
 const fine = window.matchMedia("(hover: hover) and (pointer: fine)");
 const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
 let px = 0;
@@ -264,6 +254,8 @@ function light() {
   const el = under && fine.matches && !reduced.matches ? under.closest(LIT) : null;
   if (el !== lit) {
     lit?.removeAttribute("data-lit");
+    lit?.style.removeProperty("--tilt-x");
+    lit?.style.removeProperty("--tilt-y");
     lit = el;
     lit?.setAttribute("data-lit", "");
   }
@@ -271,6 +263,11 @@ function light() {
   const r = el.getBoundingClientRect();
   el.style.setProperty("--spot-x", `${(px - r.left).toFixed(1)}px`);
   el.style.setProperty("--spot-y", `${(py - r.top).toFixed(1)}px`);
+  // 悬停倾斜（见 style.css）：鼠标在卡片里的位置换算成 -1…1
+  const tx = Math.min(1, Math.max(0, (px - r.left) / r.width));
+  const ty = Math.min(1, Math.max(0, (py - r.top) / r.height));
+  el.style.setProperty("--tilt-x", ((0.5 - ty) * 2).toFixed(3));
+  el.style.setProperty("--tilt-y", ((tx - 0.5) * 2).toFixed(3));
 }
 const schedule = () => { if (!pending) pending = requestAnimationFrame(light); };
 document.addEventListener("pointermove", (ev) => {
@@ -290,15 +287,11 @@ const leave = () => { under = null; schedule(); };
 document.documentElement.addEventListener("pointerleave", leave);
 window.addEventListener("blur", leave);
 
-// 页面自带主题色（详细历史页是绿色）
-const theme = document.documentElement.dataset.glow;
-
 function boot() {
   start();
-  if (theme) {
-    setBgHue(`var(--c-${theme})`);
-    cur.colors[0] = target.colors[0].slice(); // 一打开就是主题色，不从琥珀色渐变过去
-  }
+  tintCards();
+  new MutationObserver(queueTint).observe(document.body, { childList: true, subtree: true });
+  window.addEventListener("resize", queueTint);
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true });
 else boot();

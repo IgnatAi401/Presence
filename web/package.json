@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "perf": "node scripts/perf-server.mjs",
     "dev": "wrangler dev --port 8788",
     "deploy": "wrangler deploy"
   },

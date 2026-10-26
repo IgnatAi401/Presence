@@ -24,6 +24,9 @@ node_modules/
 .dev.vars*
 .env*
 
+# 本机 Safari 性能测量原始数据和截图
+safari-perf-reports/
+
 # Xcode
 xcuserdata/
 DerivedData/

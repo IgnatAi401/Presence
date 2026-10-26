@@ -10,6 +10,67 @@ export const mediaUrl = (url) => (url.startsWith(`${PROD_API}/`) ? API + url.sli
 export const $ = (id) => document.getElementById(id);
 export const hue = (category) => `var(--c-${category}, var(--amber))`;
 
+// 带图片的卡片（封面、App 图标）用图片的主色当主题色：缩成 24×24，按色相分 12 组，
+// 越鲜艳的像素权重越大，取权重最大的一组的平均色，再提亮成霓虹色。
+// 第一次调用时返回 null 并开始加载，加载完调用 onReady（各页每秒重画，下次就用上了）；
+// 几乎没有颜色（黑白封面、单色图标）时用白色；图片读不了（跨域没给权限）时一直是 null，卡片退回类别颜色
+const imageHues = new Map();
+export function imageHue(url, onReady) {
+  if (!url) return null;
+  if (imageHues.has(url)) return imageHues.get(url);
+  imageHues.set(url, null);
+  if (imageHues.size > 200) imageHues.delete(imageHues.keys().next().value);
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.decoding = "async";
+  img.onload = () => {
+    try {
+      const c = document.createElement("canvas");
+      c.width = c.height = 24;
+      const g = c.getContext("2d", { willReadFrequently: true });
+      g.drawImage(img, 0, 0, 24, 24);
+      const px = g.getImageData(0, 0, 24, 24).data;
+      const bins = Array.from({ length: 12 }, () => ({ w: 0, r: 0, g: 0, b: 0 }));
+      for (let i = 0; i < px.length; i += 4) {
+        if (px[i + 3] < 128) continue;
+        const [r, gg, b] = [px[i], px[i + 1], px[i + 2]];
+        const max = Math.max(r, gg, b);
+        const min = Math.min(r, gg, b);
+        const sat = max ? (max - min) / max : 0;
+        if (sat < 0.25 || max < 50) continue;
+        let hh = max === r ? (gg - b) / (max - min) : max === gg ? 2 + (b - r) / (max - min) : 4 + (r - gg) / (max - min);
+        hh = ((hh * 60) + 360) % 360;
+        const bin = bins[Math.floor(hh / 30) % 12];
+        const w = sat * sat * (max / 255);
+        bin.w += w; bin.r += r * w; bin.g += gg * w; bin.b += b * w;
+      }
+      const best = bins.reduce((a, b) => (b.w > a.w ? b : a));
+      let css = "#F2F0FA"; // 鲜艳的像素太少：白色
+      if (best.w >= 8) {
+        const [hh, s] = hsl(best.r / best.w, best.g / best.w, best.b / best.w);
+        css = `hsl(${Math.round(hh)} ${Math.round(Math.max(s, 0.72) * 100)}% 64%)`;
+      }
+      imageHues.set(url, css);
+      onReady?.(css);
+    } catch {
+      /* 跨域图片读不了像素 */
+    }
+  };
+  img.src = url;
+  return null;
+}
+function hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const hh = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(hh * 60 + 360) % 360, s, l];
+}
+
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -62,8 +123,29 @@ export function dur(sec) {
   return `${sec} 秒`;
 }
 
-export const clock = (ts) =>
-  new Date(ts * 1000).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+// 时间线会格式化几千次时间；复用格式器，避免每个色块都初始化区域设置。
+const clockFormatter = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+export const clock = (ts) => clockFormatter.format(new Date(ts * 1000));
+
+// 明细按批创建节点；保留全部记录，可继续加载，换日期会重置。
+export function pagedList(ul, rows, renderRow, emptyText, pageSize = 100) {
+  ul._moreButton?.remove();
+  ul.replaceChildren();
+  let shown = 0;
+  const more = h("button", { type: "button", class: "btn log-more" });
+  ul._moreButton = more;
+  const append = () => {
+    const end = Math.min(rows.length, shown + pageSize);
+    ul.append(...rows.slice(shown, end).map(renderRow));
+    shown = end;
+    more.textContent = `再显示 ${Math.min(pageSize, rows.length - shown)} 条（已显示 ${shown} / ${rows.length}）`;
+    more.hidden = shown >= rows.length;
+  };
+  more.addEventListener("click", append);
+  ul.after(more);
+  if (rows.length) append();
+  else { ul.append(h("li", { class: "empty" }, emptyText)); more.hidden = true; }
+}
 
 export async function getJSON(path, init = {}) {
   const r = await fetch(`${API}${path}`, { cache: "no-store", ...init });

@@ -5,7 +5,9 @@
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./public",
-    "html_handling": "auto-trailing-slash"
+    "html_handling": "auto-trailing-slash",
+    // /history 没有单独的文件：交给 index.html，由 views.js 显示历史视图
+    "not_found_handling": "single-page-application"
   },
   // 绑定 now.ignat.ai（Cloudflare 自动创建 DNS 记录和证书）
   "routes": [

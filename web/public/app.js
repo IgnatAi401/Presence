@@ -1,7 +1,7 @@
 // now.ignat.ai 公开状态页：先拉 /now 和 /today，再用 SSE 实时更新
 
-import { $, API, clock, dur, getJSON, h, hue, mediaUrl, patch, timelineBar, totalsList } from "./lib.js";
-import { setBgHue } from "./bg.js";
+import { $, API, clock, dur, getJSON, h, hue, imageHue, mediaUrl, patch, timelineBar, totalsList } from "./lib.js";
+import { setBgLive } from "./bg.js";
 
 const KICKER = {
   anchor: "此刻",
@@ -14,6 +14,7 @@ let state = null; // 最近一次 /now
 let today = null; // 最近一次 /today
 let receivedAt = 0; // 收到 state 时的本地时间（秒），用来推算进度
 let serverOffset = 0; // 服务器时间 − 本地时间
+let todayDirty = false;
 
 const nowSec = () => Date.now() / 1000 + serverOffset;
 
@@ -32,6 +33,14 @@ function phoneIcon(item, slot) {
     if (phoneIcons.size > 50) phoneIcons.delete(phoneIcons.keys().next().value);
   }
   return icon;
+}
+
+// 卡片主题色：有封面、App 图标就按图片的主色，没有（或图片没什么颜色）就用类别颜色
+function cardHue(item) {
+  const c = item.card;
+  const url = item.category === "phone" && item.icon ? `/icons/apps/${item.icon}.png`
+    : c?.cover ? mediaUrl(c.cover) : null;
+  return imageHue(url, () => render()) || hue(item.category);
 }
 
 // 看完了在看评论区：视频暂停着，但人还在
@@ -135,7 +144,7 @@ function renderCard(item, t, inSide = false) {
     pos != null ? h("div", { class: "times" }, h("span", {}, mmss(pos)), h("span", {}, mmss(c.duration))) : null,
   );
   const kind = web ? " web" : item.category === "music" ? "" : " wide";
-  const attrs = { class: `card${kind}${badge ? " has-badge" : ""}`, "--hue": hue(item.category),
+  const attrs = { class: `card${kind}${badge ? " has-badge" : ""}`, "--hue": cardHue(item),
     "--badge-w": badge ? `${badgeWidth(badge)}px` : null };
   const children = [cover, body, badge ? h("span", { class: "badge" }, badge) : null];
   return href
@@ -143,21 +152,16 @@ function renderCard(item, t, inSide = false) {
     : h("div", attrs, ...children);
 }
 
-let bgKey = null;
 function renderMain(t) {
   const m = state.main;
   const hero = document.querySelector(".hero");
-  const color = m.type === "idle" ? "var(--dim)" : hue(m.category);
+  const color = m.type === "idle" ? "var(--dim)" : cardHue(m);
   hero.style.setProperty("--hue", color);
   // 有封面时在主状态背后铺一层模糊的封面
   const art = m.card?.cover && m.card.kind !== "web" ? `url("${encodeURI(mediaUrl(m.card.cover))}")` : null;
   if (art) hero.style.setProperty("--art", art);
   else hero.style.removeProperty("--art");
-  const key = `${color}|${m.category}`;
-  if (key !== bgKey) {
-    bgKey = key;
-    setBgHue(color, m.category !== "offline");
-  }
+  setBgLive(m.category !== "offline");
   $("clock").textContent = clock(t);
   $("kicker").textContent = m.category === "out" ? "出门走走" : m.type === "idle" ? (m.category === "offline" ? "OFFLINE" : "AWAY") : KICKER[m.type];
   const label = $("main-label");
@@ -173,7 +177,8 @@ function renderMain(t) {
     meta.append(parts.length ? " · " : "", h("span", { class: "slack" }, `🐟 摸鱼中 ${dur(t - m.slacking.since)}`));
   }
   patch($("main-card"), [renderCard(m, t)]);
-  document.title = m.type === "idle" ? "Now · Ignat" : `${m.label} · Now`;
+  // 切到历史视图时标题归 views.js 管
+  if (document.documentElement.dataset.view === "now") document.title = m.type === "idle" ? "Now · Ignat" : `${m.label} · Now`;
 }
 
 // 类别简称：/today 里带着服务器给的名字，还没拉到时先用标签
@@ -232,32 +237,36 @@ function renderTile(item, index, t) {
       sub ? h("div", { class: "sub", title: sub }, sub) : null),
     pos != null ? h("i", { class: "prog", style: { width: `${((pos / c.duration) * 100).toFixed(2)}%` } }) : null,
   ];
-  return h("li", { class: ["tile", wide && "wide", paused && "paused"].filter(Boolean).join(" "), "--hue": hue(item.category) },
+  return h("li", { class: ["tile", wide && "wide", paused && "paused"].filter(Boolean).join(" "), "--hue": cardHue(item) },
     href ? h("a", { class: "in", href, target: "_blank", rel: "noopener" }, ...inner) : h("div", { class: "in" }, ...inner));
 }
 
-// 音乐、视频用大卡片（封面、进度），排在最前面；其余是小卡片
+// 音乐、视频用大卡片（封面、进度）；手机 App 等小卡片排在前面，长条在下面
 const isBig = (item) => ["music", "video"].includes(item.category) && item.card && item.card.kind !== "web";
 
 function renderSide(t) {
   $("side-wrap").hidden = !state.side.length;
   const items = state.side.map((item, index) => ({ item, index }));
-  const ordered = [...items.filter(({ item }) => isBig(item)), ...items.filter(({ item }) => !isBig(item))];
+  const ordered = [...items.filter(({ item }) => !isBig(item)), ...items.filter(({ item }) => isBig(item))];
   patch($("side"), ordered.map(({ item, index }) => isBig(item)
-    ? h("li", { class: "tile big", "--hue": hue(item.category) }, renderCard(item, t, true))
+    ? h("li", { class: "tile big", "--hue": cardHue(item) }, renderCard(item, t, true))
     : renderTile(item, index, t)));
 }
 
 function renderToday(t) {
   if (!today) return;
-  timelineBar($("bar"), today, today.timeline);
+  // 秒钟和播放进度每秒走；历史片段只在接口返回新数据后重建。
+  if (todayDirty) {
+    timelineBar($("bar"), today, today.timeline);
+    $("today-date").textContent = today.date;
+    totalsList($("totals"), today.totals, today.names);
+    todayDirty = false;
+  }
   $("cursor").style.left = `${Math.min(100, ((t - today.start) / (today.end - today.start)) * 100)}%`;
-  $("today-date").textContent = today.date;
-  totalsList($("totals"), today.totals, today.names);
 }
 
 function render() {
-  if (!state) return;
+  if (!state || document.hidden) return;
   const t = nowSec();
   renderMain(t);
   renderSide(t);
@@ -282,6 +291,7 @@ function accept(data) {
 async function loadToday() {
   try {
     today = await getJSON("/today");
+    todayDirty = true;
     render();
   } catch {
     /* 时间线拉取失败不影响主状态 */
@@ -326,6 +336,7 @@ await loadToday();
 connect();
 setInterval(render, 1000);
 setInterval(loadToday, 60000);
+addEventListener("viewchange", (ev) => ev.detail === "now" && render());
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     loadNow();

@@ -5,47 +5,106 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Now · Ignat</title>
   <meta name="description" content="Ignat 此刻大致在做什么">
-  <meta name="theme-color" content="#0B0908">
+  <meta name="theme-color" content="#07070C">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/fonts/vt323.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/pages.css">
+  <!-- / 和 /history 是同一个页面的两个视图：先按地址定好显示哪个，免得闪一下另一个 -->
+  <script>document.documentElement.dataset.view = /^\/history\/?$/.test(location.pathname) ? "history" : "now";</script>
 </head>
 <body>
-  <main class="wrap home">
+  <main class="wrap">
     <header class="top">
       <nav class="tabs" aria-label="页面">
-        <a href="/" aria-current="page">此刻</a>
-        <a href="/history">历史</a>
+        <a href="/" data-view="now">此刻</a>
+        <a href="/history" data-view="history">历史</a>
         <a href="/me">详细历史</a>
       </nav>
       <span class="air" id="air" data-state="connecting"><i></i><b id="air-text">TUNING</b></span>
     </header>
 
-    <section class="hero" aria-live="polite">
-      <div class="hero-text">
-        <p class="kicker"><span id="kicker">此刻</span><span class="clock" id="clock"></span></p>
-        <h1 class="main" id="main-label">……</h1>
-        <p class="meta" id="main-meta"></p>
-        <p class="notice" id="notice" hidden>状态服务暂时离线，稍后会自动重连。</p>
-      </div>
-      <div class="hero-card" id="main-card"></div>
-    </section>
+    <div class="views">
+      <div class="view" id="view-now">
+        <section class="hero" aria-live="polite">
+          <div class="hero-text">
+            <p class="kicker"><span id="kicker">此刻</span><span class="clock" id="clock"></span></p>
+            <h1 class="main" id="main-label">……</h1>
+            <p class="meta" id="main-meta"></p>
+            <p class="notice" id="notice" hidden>状态服务暂时离线，稍后会自动重连。</p>
+          </div>
+          <div class="hero-card" id="main-card"></div>
+        </section>
 
-    <section class="side" id="side-wrap" aria-label="同时在做的事" hidden>
-      <ul class="tiles" id="side"></ul>
-    </section>
+        <section class="side" id="side-wrap" aria-label="同时在做的事" hidden>
+          <ul class="tiles" id="side"></ul>
+        </section>
 
-    <section class="today" aria-label="今日">
-      <div class="today-head">
-        <h2>今日</h2>
-        <span id="today-date"></span>
+        <section class="today" aria-label="今日">
+          <div class="today-head">
+            <h2>今日</h2>
+            <span id="today-date"></span>
+          </div>
+          <div class="bar" id="bar"><span class="cursor" id="cursor"></span></div>
+          <div class="ticks"><span>04:00</span><span>10:00</span><span>16:00</span><span>22:00</span><span>04:00</span></div>
+          <ul class="totals" id="totals"></ul>
+        </section>
       </div>
-      <div class="bar" id="bar"><span class="cursor" id="cursor"></span></div>
-      <div class="ticks"><span>04:00</span><span>10:00</span><span>16:00</span><span>22:00</span><span>04:00</span></div>
-      <ul class="totals" id="totals"></ul>
-    </section>
+
+      <div class="view" id="view-history">
+        <p class="notice" id="history-notice" hidden>状态服务暂时离线，稍后再来看看。</p>
+
+        <section class="panel" aria-labelledby="heat-h" style="--hue: var(--c-research)">
+          <div class="panel-head">
+            <h2 id="heat-h">正事</h2>
+            <span id="heat-sum"></span>
+          </div>
+          <p class="hint">每格一天，颜色越深当天搞科研、开发的时间越长。点一格查看当天。</p>
+          <div class="heat-scroll"><div class="heat" id="heat"></div></div>
+          <div class="heat-legend" id="heat-legend"></div>
+        </section>
+
+        <section class="panel" aria-labelledby="day-h">
+          <div class="panel-head">
+            <h2 id="day-h">这一天</h2>
+            <span class="day-nav">
+              <button type="button" id="prev" aria-label="前一天">‹</button>
+              <input type="date" id="date" aria-label="选择日期">
+              <button type="button" id="next" aria-label="后一天">›</button>
+            </span>
+          </div>
+          <div class="bar" id="day-bar"></div>
+          <div class="ticks"><span>04:00</span><span>10:00</span><span>16:00</span><span>22:00</span><span>04:00</span></div>
+          <ul class="totals" id="day-totals"></ul>
+        </section>
+
+        <section class="panel" aria-labelledby="trend-h">
+          <div class="panel-head">
+            <h2 id="trend-h">趋势</h2>
+            <span class="seg" role="group" aria-label="按周或按月">
+              <button type="button" data-unit="week" aria-pressed="true">周</button>
+              <button type="button" data-unit="month" aria-pressed="false">月</button>
+            </span>
+          </div>
+          <div class="chips" id="chips" role="group" aria-label="类别"></div>
+          <div class="cols" id="trend"></div>
+        </section>
+
+        <div class="two">
+          <section class="panel" aria-labelledby="games-h">
+            <div class="panel-head"><h2 id="games-h">游戏</h2><span>半年内</span></div>
+            <ol class="rank" id="games"></ol>
+          </section>
+          <section class="panel" aria-labelledby="music-h">
+            <div class="panel-head"><h2 id="music-h">听歌</h2><span>半年内</span></div>
+            <ol class="rank" id="music"></ol>
+          </section>
+        </div>
+      </div>
+    </div>
 
   </main>
+  <script src="/views.js" type="module"></script>
   <script src="/bg.js" type="module"></script>
   <script src="/app.js" type="module"></script>
 </body>

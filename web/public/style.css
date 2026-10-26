@@ -21,36 +21,34 @@
 }
 
 :root {
-  --bg: #0B0908;
-  --paper: #EFE6D4;
+  --bg: #07070C;
+  --paper: #ECEAF5;
   --amber: #FFB36B;
-  --dim: rgba(239, 230, 212, 0.56);
-  --faint: rgba(239, 230, 212, 0.18);
-  --line: rgba(239, 230, 212, 0.1);
-  --glass: rgba(17, 14, 12, 0.72);
+  --dim: rgba(236, 234, 245, 0.56);
+  --faint: rgba(236, 234, 245, 0.18);
+  --line: rgba(236, 234, 245, 0.1);
+  --glass: rgba(11, 11, 18, 0.78);
   --mono: "IBM Plex Mono", "SF Mono", Menlo, "PingFang SC", monospace;
   --vt: "VT323", "SF Mono", Menlo, monospace;
   --cjk: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
 
-  /* 类别颜色 */
-  --c-class: #7FA7FF;
-  --c-eat: #F2C14E;
-  --c-sleep: #8C7BD8;
-  --c-office: #3FB98A;
-  --c-research: #6FD3A0;
-  --c-dev: #4FC1D9;
-  --c-game: #FF7A6B;
-  --c-out: #E9A06B;
-  --c-custom: #D9B98C;
-  --c-video: #F27FB5;
-  --c-browse: #B4A58E;
-  --c-phone: #C78BE0;
-  --c-music: #FFB36B;
-  --c-away: rgba(239, 230, 212, 0.35);
-  --c-offline: rgba(239, 230, 212, 0.2);
+  /* 类别颜色：霓虹灯管那样饱和、亮，每张卡片按自己内容的类别取一种 */
+  --c-class: #5C9DFF;
+  --c-eat: #FFD447;
+  --c-sleep: #9B7CFF;
+  --c-office: #2BE3A0;
+  --c-research: #7CF26B;
+  --c-dev: #2FD8FF;
+  --c-game: #FF4D6D;
+  --c-out: #FF8A3D;
+  --c-custom: #E8C27A;
+  --c-video: #FF4FD8;
+  --c-browse: #A9B4C8;
+  --c-phone: #C77DFF;
+  --c-music: #FFB020;
+  --c-away: rgba(236, 234, 245, 0.35);
+  --c-offline: rgba(236, 234, 245, 0.2);
 }
-/* 详细历史页的主题色用绿色 */
-:root[data-glow="research"] { --amber: #6FD3A0; --glow: #6FD3A0; }
 
 * { box-sizing: border-box; }
 
@@ -65,12 +63,12 @@ body {
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
 }
-/* 没有 WebGL 时的静态背景；有时被 bg.js 的画布盖住 */
+/* 画布不可用时的静态网格（和 bg.js 的网格同间距）；平时被 bg.js 的画布盖住 */
 body {
   background:
-    radial-gradient(90% 60% at 20% 0%, rgba(255, 179, 107, 0.07), transparent 70%),
-    radial-gradient(70% 50% at 100% 100%, rgba(127, 167, 255, 0.04), transparent 70%),
-    var(--bg) fixed;
+    linear-gradient(rgba(236, 234, 245, 0.035) 1px, transparent 1px) 0 0 / 56px 56px fixed,
+    linear-gradient(90deg, rgba(236, 234, 245, 0.035) 1px, transparent 1px) 0 0 / 56px 56px fixed,
+    var(--bg);
 }
 canvas.bg {
   position: fixed;
@@ -96,7 +94,7 @@ body::after {
 a { color: inherit; }
 
 .wrap {
-  max-width: 760px;
+  max-width: 880px; /* 三个页面同宽 */
   margin: 0 auto;
   padding: max(24px, env(safe-area-inset-top)) 16px 48px;
 }
@@ -126,18 +124,19 @@ a { color: inherit; }
   text-decoration: none;
   transition: color 0.2s, background 0.2s;
 }
-.tabs a:hover { color: var(--paper); }
-/* 当前页的高亮用背景辉光的颜色（主页随状态变，bg.js 设置 --glow；详细历史页固定绿色） */
-@property --glow { syntax: "<color>"; inherits: true; initial-value: #FFB36B; }
+/* 三个页面各一种霓虹色，当前页亮起来 */
+.tabs a:nth-child(1) { --hue: var(--c-dev); }
+.tabs a:nth-child(2) { --hue: var(--c-video); }
+.tabs a:nth-child(3) { --hue: var(--c-research); }
+.tabs a:hover { color: var(--hue); }
 .tabs a[aria-current="page"] {
-  color: var(--paper);
-  background: color-mix(in srgb, var(--glow) 26%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glow) 55%, transparent), 0 0 18px color-mix(in srgb, var(--glow) 30%, transparent);
-  transition: --glow 1.2s, color 0.2s;
+  color: var(--hue);
+  background: color-mix(in srgb, var(--hue) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hue) 70%, transparent), 0 0 16px -2px color-mix(in srgb, var(--hue) 55%, transparent);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--hue) 70%, transparent);
 }
 .top .logout { margin-left: auto; font: 13px var(--cjk); text-decoration: none; }
 .top .logout:hover { color: var(--paper); }
-.home { max-width: 880px; }
 .air {
   margin-left: auto;
   display: inline-flex;
@@ -169,7 +168,7 @@ a { color: inherit; }
     var(--spot),
     radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--hue, var(--amber)) 14%, transparent), transparent 65%),
     var(--glass);
-  box-shadow: 0 20px 50px -30px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(239, 230, 212, 0.06);
+  box-shadow: 0 20px 50px -30px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(236, 234, 245, 0.06);
   overflow: hidden;
   transition: border-color 0.8s, box-shadow 0.8s;
 }
@@ -247,7 +246,7 @@ a { color: inherit; }
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--spot, none), rgba(239, 230, 212, 0.03);
+  background: var(--spot, none), rgba(236, 234, 245, 0.03);
   text-decoration: none;
   position: relative;
 }
@@ -375,14 +374,14 @@ a.in:hover { border-color: color-mix(in srgb, var(--hue) 45%, transparent); }
   width: 52px;
   height: 52px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--hue) 14%, rgba(239, 230, 212, 0.04)) center / cover no-repeat;
+  background: color-mix(in srgb, var(--hue) 14%, rgba(236, 234, 245, 0.04)) center / cover no-repeat;
   color: var(--hue);
   font: 30px/1 var(--vt);
 }
 .tile.wide .in { grid-template-columns: 84px 1fr; }
 .tile.wide .thumb { width: 84px; height: 52px; }
 .tile .thumb img.ic, .tile .thumb .app-icon { width: 100%; height: 100%; margin: 0; border-radius: 10px; object-fit: cover; }
-.tile .thumb .player { position: absolute; right: -5px; bottom: -5px; width: 18px; height: 18px; border-radius: 5px; box-shadow: 0 0 0 2px #110E0C; }
+.tile .thumb .player { position: absolute; right: -5px; bottom: -5px; width: 18px; height: 18px; border-radius: 5px; box-shadow: 0 0 0 2px #0C0C14; }
 .tile .thumb .player.aimp { border-radius: 50%; }
 .tile .info { min-width: 0; }
 .tile .row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
@@ -418,7 +417,7 @@ a.in:hover { border-color: color-mix(in srgb, var(--hue) 45%, transparent); }
   height: 26px;
   margin-top: 10px;
   border-radius: 6px;
-  background: rgba(239, 230, 212, 0.05);
+  background: rgba(236, 234, 245, 0.05);
   overflow: hidden;
 }
 .bar .blk { position: absolute; top: 0; bottom: 0; min-width: 1px; background: var(--hue); }
@@ -428,8 +427,8 @@ a.in:hover { border-color: color-mix(in srgb, var(--hue) 45%, transparent); }
   border-radius: 8px;
   /* 每两小时一条细线 */
   background:
-    repeating-linear-gradient(to right, transparent 0 calc(100% / 12 - 1px), rgba(239, 230, 212, 0.06) calc(100% / 12 - 1px) calc(100% / 12)),
-    rgba(239, 230, 212, 0.04);
+    repeating-linear-gradient(to right, transparent 0 calc(100% / 12 - 1px), rgba(236, 234, 245, 0.06) calc(100% / 12 - 1px) calc(100% / 12)),
+    rgba(236, 234, 245, 0.04);
 }
 .today .bar .blk { opacity: 0.88; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18); }
 .today .bar .cursor { opacity: 1; box-shadow: 0 0 10px var(--paper); }
@@ -444,7 +443,7 @@ a.in:hover { border-color: color-mix(in srgb, var(--hue) 45%, transparent); }
   padding: 3px 10px 3px 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(239, 230, 212, 0.03);
+  background: rgba(236, 234, 245, 0.03);
 }
 
 @media (max-width: 480px) {
@@ -458,9 +457,25 @@ a.in:hover { border-color: color-mix(in srgb, var(--hue) 45%, transparent); }
   .tabs a { padding: 4px 11px; }
 }
 
+/* 霓虹卡片：每张卡片只用自己的 --hue —— 边框是一圈半透明灯管，顶边一道更亮的光（inset 阴影，跟着圆角弯），
+   外面一层很淡的同色辉光（都写在下面悬停倾斜的 box-shadow 里），里面左上角带一点同色。
+   背景从边框外沿开始铺（border-box）：默认从边框内侧铺，渐变会在半透明边框底下重复一份，圆角处接不上 */
+.hero, .today, .panel, .tile > .in, .tile.big .card, .hero-card .card:not(.web), .stat {
+  border-color: color-mix(in srgb, var(--hue, var(--amber)) 34%, transparent);
+  background:
+    var(--spot),
+    linear-gradient(150deg, color-mix(in srgb, var(--hue, var(--amber)) 11%, transparent), transparent 50%),
+    var(--glass);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+}
+.today h2, .panel h2 { color: var(--hue, var(--paper)); text-shadow: 0 0 14px color-mix(in srgb, var(--hue, var(--amber)) 55%, transparent); }
+.stat b { color: var(--hue); text-shadow: 0 0 12px color-mix(in srgb, var(--hue) 45%, transparent); }
+
 /* 鼠标泛光（参照 personal_profile 的 spotlight）：鼠标所在的那张卡片（bg.js 加 data-lit）
    里面亮起一团柔光、边缘亮起一道高光，都跟着鼠标走（--spot-x / --spot-y 是相对卡片的坐标）；
-   移开时在原处慢慢淡出。--lit 注册成数字才能做淡入淡出 */
+   移开时在原处慢慢淡出。--lit 注册成数字才能做淡入淡出。
+   颜色取卡片自己的 --hue（时间线、历史面板由 bg.js 按卡片内容算出） */
 @property --lit { syntax: "<number>"; inherits: true; initial-value: 0; }
 .hero, .today, .tile > .in, .tile.big .card, .hero-card .card:not(.web), .panel {
   --lit: 0;
@@ -484,6 +499,86 @@ a.in:hover { border-color: color-mix(in srgb, var(--hue) 45%, transparent); }
   pointer-events: none;
   opacity: calc(var(--lit) * 0.8);
 }
+
+/* 悬停倾斜（参照 personal_profile 的 data-tilt）：卡片跟着鼠标朝光源方向翻转、浮起，阴影加深；
+   bg.js 给 data-lit 的卡片写 --tilt-x / --tilt-y（-1…1）。
+   小卡片转得明显；音乐、视频长条和大面板（主状态、时间线、历史面板）很宽，同样的角度边缘会甩得太远，所以角度小一些。
+   浮起、放大、阴影直接写在 [data-lit] 上，不跟着 --lit 逐帧重算：变形交给合成器（will-change），
+   归位时不会因为每帧重算样式、重画大块阴影而卡顿 */
+.tile > .in, .stat {
+  --tilt-deg: 10deg;
+  --lift: -6px;
+  --grow: 1.025;
+  --depth: 700px;
+}
+/* 音乐、视频的长条卡片：宽而矮，左右转一点点就甩得很远，角度和放大都收着 */
+.tile.big .card, .hero-card .card:not(.web) {
+  --tilt-deg: 3deg;
+  --lift: -3px;
+  --grow: 1.008;
+  --depth: 1400px;
+}
+.hero, .today, .panel {
+  --tilt-deg: 2.4deg;
+  --lift: -4px;
+  --grow: 1.006;
+  --depth: 1600px;
+}
+.hero, .today, .panel, .tile > .in, .tile.big .card, .hero-card .card:not(.web), .stat {
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  transform: perspective(var(--depth))
+    rotateX(calc(var(--tilt-x, 0) * var(--tilt-deg)))
+    rotateY(calc(var(--tilt-y, 0) * var(--tilt-deg) * 1.2));
+  translate: 0 0;
+  scale: 1;
+  box-shadow:
+    0 12px 30px -22px rgba(0, 0, 0, 0.6),
+    0 0 26px -12px color-mix(in srgb, var(--hue, var(--amber)) 60%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--hue, var(--amber)) 45%, transparent),
+    inset 0 0 22px -14px color-mix(in srgb, var(--hue, var(--amber)) 70%, transparent);
+  will-change: transform;
+  transition:
+    --lit 0.45s var(--ease),
+    transform 0.5s var(--ease),
+    translate 0.5s var(--ease),
+    scale 0.5s var(--ease),
+    box-shadow 0.5s var(--ease),
+    border-color 0.2s;
+}
+:is(.hero, .today, .panel, .tile > .in, .tile.big .card, .hero-card .card:not(.web), .stat)[data-lit] {
+  translate: 0 var(--lift);
+  scale: var(--grow);
+  box-shadow:
+    0 28px 54px -22px rgba(0, 0, 0, 0.9),
+    0 0 34px -6px color-mix(in srgb, var(--hue, var(--amber)) 50%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--hue, var(--amber)) 55%, transparent),
+    inset 0 0 26px -12px color-mix(in srgb, var(--hue, var(--amber)) 80%, transparent);
+  /* 跟鼠标时倾斜要跟得紧 */
+  transition-duration: 0.45s, 0.2s, 0.35s, 0.35s, 0.35s, 0.2s;
+}
+
+/* 此刻 / 历史两个视图（见 views.js）：叠在同一格里，只显示地址对应的那个。
+   隐藏用 content-visibility 而不是 display: none：不画、不能点，但保留算好的排版，
+   切回来不用整页重新排版（历史视图约 16ms，正好压在过渡开始的那一帧） */
+.views { display: grid; }
+.view { grid-area: 1 / 1; min-width: 0; }
+html:not([data-view="history"]) #view-history, html[data-view="history"] #view-now { content-visibility: hidden; }
+/* 切换时只给内容做过渡：背景画布、顶部标签不截图，照常在跑 */
+:root { view-transition-name: none; }
+.views { view-transition-name: views; }
+/* 只动 opacity 和 transform，全交给合成器：默认的外框动画会逐帧改宽高（两个视图不一样高），
+   要在主线程排版，和背景画布抢时间就会掉帧；模糊滤镜对整页大小的截图也太重 */
+::view-transition-group(views) { animation: none; }
+::view-transition-image-pair(views) { isolation: auto; }
+::view-transition-old(views), ::view-transition-new(views) { mix-blend-mode: normal; will-change: opacity, transform; }
+::view-transition-old(views) { animation: 0.14s ease-in both view-out; }
+::view-transition-new(views) { animation: 0.3s 0.04s cubic-bezier(0.2, 0.7, 0.2, 1) both view-in; }
+html[data-dir="back"]::view-transition-old(views) { animation-name: view-out-back; }
+html[data-dir="back"]::view-transition-new(views) { animation-name: view-in-back; }
+@keyframes view-out { to { opacity: 0; transform: translate3d(-16px, 0, 0); } }
+@keyframes view-in { from { opacity: 0; transform: translate3d(20px, 0, 0); } }
+@keyframes view-out-back { to { opacity: 0; transform: translate3d(16px, 0, 0); } }
+@keyframes view-in-back { from { opacity: 0; transform: translate3d(-20px, 0, 0); } }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }

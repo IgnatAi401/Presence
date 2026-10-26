@@ -1,4 +1,4 @@
-// now.ignat.ai/history 公开历史：正事热力图、某一天的时间线、按周 / 月的趋势、游戏和听歌榜
+// now.ignat.ai/history 公开历史（首页的一个视图，见 views.js）：正事热力图、某一天的时间线、按周 / 月的趋势、游戏和听歌榜
 
 import { $, addDays, dur, enableTips, getJSON, h, hue, rankList, timelineBar, totalsList } from "/lib.js";
 
@@ -36,8 +36,15 @@ function renderHeat() {
   $("heat-legend").replaceChildren(h("span", {}, "少"),
     ...[0, 1, 2, 3, 4, 5].map((l) => h("i", { class: "cell", "data-level": l, "data-tip": l ? `≥ ${LEVELS[l - 1] || "0"} 小时` : "没有" })),
     h("span", {}, "多"));
-  heat.parentElement.scrollLeft = heat.scrollWidth; // 窄屏先看最近几周
+  scrollHeat();
 }
+
+// 窄屏先看最近几周；视图隐藏时量不出宽度，切过来时再滚
+function scrollHeat() {
+  const heat = $("heat");
+  heat.parentElement.scrollLeft = heat.scrollWidth;
+}
+addEventListener("viewchange", (ev) => { if (ev.detail === "history" && hist) scrollHeat(); });
 
 function markPicked(date) {
   for (const c of $("heat").querySelectorAll(".cell[aria-current]")) c.removeAttribute("aria-current");
@@ -51,11 +58,11 @@ async function loadDay(date) {
   $("next").disabled = date >= last;
   try {
     const day = await getJSON(`/day?date=${date}`);
-    timelineBar($("bar"), day, day.timeline);
-    totalsList($("totals"), day.totals, day.names);
-    if (!day.timeline.length) $("totals").replaceChildren(h("li", { class: "empty" }, "这天没有记录"));
+    timelineBar($("day-bar"), day, day.timeline);
+    totalsList($("day-totals"), day.totals, day.names);
+    if (!day.timeline.length) $("day-totals").replaceChildren(h("li", { class: "empty" }, "这天没有记录"));
   } catch {
-    $("notice").hidden = false;
+    $("history-notice").hidden = false;
   }
 }
 
@@ -124,5 +131,5 @@ try {
   renderRanks();
   await loadDay(new URLSearchParams(location.search).get("date") || last);
 } catch {
-  $("notice").hidden = false;
+  $("history-notice").hidden = false;
 }

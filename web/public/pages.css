@@ -9,13 +9,14 @@ button { cursor: pointer; }
 button:disabled { cursor: default; opacity: 0.35; }
 :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
+/* 边框颜色和背景见 style.css 的霓虹卡片 */
 .panel {
   margin-top: 28px;
   padding: 20px 20px 22px;
-  border: 1px solid var(--line);
+  border-width: 1px;
+  border-style: solid;
   position: relative;
   border-radius: 16px;
-  background: var(--spot), var(--glass);
 }
 .panel-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 .panel h2 { margin: 0; font-family: var(--vt); font-weight: 400; font-size: 24px; letter-spacing: 0.08em; }
@@ -34,7 +35,7 @@ button:disabled { cursor: default; opacity: 0.35; }
   padding: 4px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(239, 230, 212, 0.04);
+  background: rgba(236, 234, 245, 0.04);
   text-decoration: none;
 }
 .day-nav button { padding: 2px 10px; font-size: 16px; }
@@ -42,7 +43,7 @@ input[type="date"], select {
   padding: 3px 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(239, 230, 212, 0.04);
+  background: rgba(236, 234, 245, 0.04);
   color-scheme: dark;
 }
 .seg { display: inline-flex; gap: 4px; }
@@ -63,7 +64,7 @@ input[type="date"], select {
   padding: 6px 10px;
   border: 1px solid var(--faint);
   border-radius: 8px;
-  background: #1A1512;
+  background: #13131D;
   color: var(--paper);
   font: 12px/1.45 var(--mono), var(--cjk);
   pointer-events: none;
@@ -90,14 +91,14 @@ input[type="date"], select {
   padding: 0;
   border: 0;
   border-radius: 3px;
-  background: rgba(239, 230, 212, 0.06);
+  background: rgba(236, 234, 245, 0.06);
 }
 .cell.blank { background: none; }
 /* 单一色相，越多越深越亮 */
-.cell[data-level="1"] { background: color-mix(in srgb, var(--c-research) 22%, #110E0C); }
-.cell[data-level="2"] { background: color-mix(in srgb, var(--c-research) 42%, #110E0C); }
-.cell[data-level="3"] { background: color-mix(in srgb, var(--c-research) 64%, #110E0C); }
-.cell[data-level="4"] { background: color-mix(in srgb, var(--c-research) 84%, #110E0C); }
+.cell[data-level="1"] { background: color-mix(in srgb, var(--c-research) 22%, #0C0C14); }
+.cell[data-level="2"] { background: color-mix(in srgb, var(--c-research) 42%, #0C0C14); }
+.cell[data-level="3"] { background: color-mix(in srgb, var(--c-research) 64%, #0C0C14); }
+.cell[data-level="4"] { background: color-mix(in srgb, var(--c-research) 84%, #0C0C14); }
 .cell[data-level="5"] { background: var(--c-research); }
 button.cell:hover { box-shadow: 0 0 0 1px var(--paper); }
 .cell[aria-current] { box-shadow: 0 0 0 2px var(--amber); }
@@ -179,7 +180,7 @@ button.cell:hover { box-shadow: 0 0 0 1px var(--paper); }
 /* /me：区间、专注度 */
 .range { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 16px; }
-.stat { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.stat { position: relative; padding: 10px 12px; border-width: 1px; border-style: solid; border-radius: 10px; }
 .stat small { display: block; color: var(--dim); font-size: 12px; }
 .stat b { display: block; margin-top: 2px; font-family: var(--vt); font-weight: 400; font-size: 26px; line-height: 1.1; }
 .stat span { color: var(--dim); font-size: 12px; }
