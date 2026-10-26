@@ -50,7 +50,8 @@ MEDIA_HEADERS = {
     "X-Content-Type-Options": "nosniff",
 }
 VIDEO_META_RETRY_SEC = 3600  # 视频信息没查到时，过这么久再查
-SITE_ICON_RETRY_SEC = 86400  # 网站图标没取到时，过这么久再取
+SITE_ICON_RETRY_SEC = 600  # 网站图标没取到时，过这么久再取（多半是网络一时不通）
+SITE_ICON_REFRESH_SEC = 7 * 86400  # 取到的图标过这么久重新取一次，网站换了图标也能跟上
 DOMAIN = re.compile(r"[a-z0-9.-]{1,253}")
 STEAM_RETRY_SEC = 300  # 游戏封面没取到时，过这么久再取
 GATE_HEADER = "x-ignat-gate"
@@ -270,7 +271,7 @@ class Presence:
         if domain in self.icon_fetching or not DOMAIN.fullmatch(domain):
             return
         row = self.cached_site_icon(domain)
-        if row is not None and (row["cover_hash"] or self.clock() - row["fetched_at"] < SITE_ICON_RETRY_SEC):
+        if row is not None and self.clock() - row["fetched_at"] < (SITE_ICON_REFRESH_SEC if row["cover_hash"] else SITE_ICON_RETRY_SEC):
             return
         self.icon_fetching.add(domain)
         self.spawn(self.load_site_icon(domain))
@@ -280,6 +281,10 @@ class Presence:
             icon = await asyncio.to_thread(self.fetch_icon, domain, self.settings.media_max_bytes)
             now = self.clock()
             h = self.save_fetched_image(icon.data, "icon", icon.url, icon.mime) if icon else None
+            if h is None:
+                log.info("没取到网站图标 %s", domain)
+                old = self.cached_site_icon(domain)
+                h = old["cover_hash"] if old is not None else None  # 重新取失败时先用旧图标
             self.db.save_site_icon(domain, h, now)
             self.site_icons.pop(domain, None)
             self.update(now)

@@ -221,7 +221,7 @@ function renderTile(item, index, t) {
     cat = [cat, c.player_name].filter(Boolean).join(" · ");
     title = c.title || item.label;
     sub = [c.artist, c.album].filter(Boolean).join(" · ") + (paused ? " · 已暂停" : "");
-    thumb = coverNode(c.cover, c.player_name && c.player, c.player_name, "thumb");
+    if (c.cover || c.player_name) thumb = coverNode(c.cover, c.player_name && c.player, c.player_name, "thumb");
   } else if (item.category === "video") {
     cat = [cat, c.site_name].filter(Boolean).join(" · ");
     title = c.title || item.label;
@@ -241,7 +241,8 @@ function renderTile(item, index, t) {
     thumb = phoneIcon(item, `side-${index}`);
   }
   if (item.slacking) sub = [sub, `🐟 摸鱼中 ${dur(t - item.slacking.since)}`].filter(Boolean).join(" · ");
-  if (!thumb?.classList.contains("thumb")) thumb = h("div", { class: "thumb" }, thumb || [...cat][0]);
+  // 没有图标（搞开发、科研、吃饭等）就不留缩略图的位置；带进度条的音乐、视频大卡片不走这里
+  if (thumb && !thumb.classList.contains("thumb")) thumb = h("div", { class: "thumb" }, thumb);
   const pos = c.duration ? position(c, t) : null;
   const inner = [
     thumb,
@@ -251,7 +252,7 @@ function renderTile(item, index, t) {
       sub ? h("div", { class: "sub", title: sub }, sub) : null),
     pos != null ? h("i", { class: "prog", style: { width: `${((pos / c.duration) * 100).toFixed(2)}%` } }) : null,
   ];
-  return h("li", { class: ["tile", wide && "wide", paused && "paused"].filter(Boolean).join(" "), "--hue": cardHue(item) },
+  return h("li", { class: ["tile", wide && "wide", paused && "paused", !thumb && "bare"].filter(Boolean).join(" "), "--hue": cardHue(item) },
     href ? h("a", { class: "in", href, target: "_blank", rel: "noopener" }, ...inner) : h("div", { class: "in" }, ...inner));
 }
 

@@ -401,6 +401,9 @@ a.in:hover { border-color: color-mix(in srgb, var(--hue) 45%, transparent); }
 }
 .tile.wide .in { grid-template-columns: 84px 1fr; }
 .tile.wide .thumb { width: 84px; height: 52px; }
+/* 没有图标，或 App 图标加载失败：不留缩略图的位置 */
+.tile.bare .in, .tile .in:has(> .thumb > [hidden]:only-child) { grid-template-columns: 1fr; }
+.tile .thumb:has(> [hidden]:only-child) { display: none; }
 .tile .thumb img.ic, .tile .thumb .app-icon { width: 100%; height: 100%; margin: 0; border-radius: 10px; object-fit: cover; }
 .tile .thumb .player { position: absolute; right: -5px; bottom: -5px; width: 18px; height: 18px; border-radius: 5px; box-shadow: 0 0 0 2px #0C0C14; }
 .tile .thumb .player.aimp { border-radius: 50%; }
