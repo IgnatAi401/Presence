@@ -16,16 +16,14 @@
     <header class="top">
       <nav class="tabs" aria-label="页面">
         <a href="/">此刻</a>
-        <a href="/history">历史</a>
-        <a href="/me" aria-current="page">详细历史</a>
+        <a href="/history" aria-current="page">历史</a>
       </nav>
       <a class="logout" href="https://401.ignat.ai/">退出登录</a>
     </header>
 
     <!-- 页面本身不含数据；数据都要登录后从 api.ignat.ai 取 -->
     <section class="gate" id="gate">
-      <p id="gate-text">正在确认登录……</p>
-      <a class="btn" id="login" href="https://401.ignat.ai/" hidden>去登录</a>
+      <p id="gate-text">加载中……</p>
     </section>
 
     <div id="app" hidden>

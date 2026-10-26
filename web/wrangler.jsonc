@@ -1,10 +1,13 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // 纯静态站：只上传 public/ 目录，不需要 Worker 脚本
+  // 静态站：public/ 目录；只有打开 /me 时先经过 src/worker.js 检查登录
   "name": "presence-web",
+  "main": "src/worker.js",
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/me", "/me/", "/me/index.html"],
     "html_handling": "auto-trailing-slash",
     // /history 没有单独的文件：交给 index.html，由 views.js 显示历史视图
     "not_found_handling": "single-page-application"

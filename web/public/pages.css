@@ -22,6 +22,11 @@ button:disabled { cursor: default; opacity: 0.35; }
 .panel h2 { margin: 0; font-family: var(--vt); font-weight: 400; font-size: 24px; letter-spacing: 0.08em; }
 .panel h3 { margin: 22px 0 8px; font-family: var(--cjk); font-weight: 500; font-size: 14px; color: var(--dim); }
 .panel-head > span { color: var(--dim); font-size: 13px; }
+/* 历史页顶部去 /me 的入口 */
+.detail-link { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 14px 20px; color: var(--hue); text-decoration: none; font: 500 15px var(--cjk); }
+.detail-link small { color: var(--dim); font: 12px var(--cjk); }
+.detail-link b { margin-left: auto; font-weight: 400; transition: transform 0.2s; }
+.detail-link:hover b { transform: translateX(4px); }
 .hint { margin: 6px 0 14px; color: var(--dim); font-size: 12px; }
 .empty { color: var(--dim); font-size: 13px; list-style: none; }
 .notice[hidden] { display: none; }

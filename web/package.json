@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "perf": "node scripts/perf-server.mjs",
-    "dev": "wrangler dev --port 8788",
+    "dev": "wrangler dev --port 8788 --var LOCAL_DEV:1",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {

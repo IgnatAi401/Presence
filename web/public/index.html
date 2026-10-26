@@ -19,7 +19,6 @@
       <nav class="tabs" aria-label="页面">
         <a href="/" data-view="now">此刻</a>
         <a href="/history" data-view="history">历史</a>
-        <a href="/me">详细历史</a>
       </nav>
       <span class="air" id="air" data-state="connecting"><i></i><b id="air-text">TUNING</b></span>
     </header>
@@ -53,6 +52,7 @@
 
       <div class="view" id="view-history">
         <p class="notice" id="history-notice" hidden>状态服务暂时离线，稍后再来看看。</p>
+        <a class="panel detail-link" href="/me/" style="--hue: var(--paper)">详细历史<small>完整时间线、播放和浏览记录、专注度</small><b aria-hidden="true">→</b></a>
 
         <section class="panel" aria-labelledby="heat-h" style="--hue: var(--c-research)">
           <div class="panel-head">
@@ -78,7 +78,7 @@
           <ul class="totals" id="day-totals"></ul>
         </section>
 
-        <section class="panel" aria-labelledby="trend-h">
+        <section class="panel" aria-labelledby="trend-h" style="--hue: var(--c-class)">
           <div class="panel-head">
             <h2 id="trend-h">趋势</h2>
             <span class="seg" role="group" aria-label="按周或按月">

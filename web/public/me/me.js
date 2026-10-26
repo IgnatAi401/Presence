@@ -23,17 +23,11 @@ async function priv(path, init = {}) {
 }
 
 function showGate(err) {
+  // 登录 Cookie 过期：直接去登录，不显示中间提示
+  if (err instanceof Unauthorized) return location.replace(`${err.login}?return=${encodeURIComponent(location.href)}`);
   $("app").hidden = true;
   $("gate").hidden = false;
-  if (err instanceof Unauthorized) {
-    const url = `${err.login}?return=${encodeURIComponent(location.href)}`;
-    $("gate-text").textContent = "需要先登录。";
-    $("login").href = url;
-    $("login").hidden = false;
-    location.replace(url);
-  } else {
-    $("gate-text").textContent = "状态服务暂时离线，或私有接口还没开通。稍后刷新试试。";
-  }
+  $("gate-text").textContent = "状态服务暂时离线，或私有接口还没开通。稍后刷新试试。";
 }
 
 // -- 某一天
