@@ -31,6 +31,7 @@ from .config import CONFIG_DIR, Settings
 from .db import DB
 from .engine import Engine, Snapshot, public_host
 from .rules import Rules
+from .signals import normalize as normalize_signal
 from .sources import steam, video, web
 from .sources.calendar import CalendarUnavailable, fetch_courses
 
@@ -73,6 +74,8 @@ class SignalIn(BaseModel):
 
     @model_validator(mode="after")
     def validate_outing(self):
+        if self.kind == "manual" and self.data.get("action", "start") not in ("start", "stop"):
+            raise ValueError("action 须为 start 或 stop")
         if self.kind == "manual" and self.data.get("state") == "custom" and "tier" in self.data:
             tier = self.data["tier"]
             if isinstance(tier, bool) or not isinstance(tier, (int, float)) or not 1 <= tier <= 2147483647 or tier % 1:
@@ -184,7 +187,7 @@ class Presence:
         rows = []
         for s in signals:
             ts = now if s.ts is None else min(s.ts, now)  # 设备时钟超前时按服务器时间算
-            rows.append((source, s.kind, ts, s.ttl, s.data))
+            rows.append((source, s.kind, ts, s.ttl, normalize_signal(s.kind, s.data)))
         rows.sort(key=lambda r: r[2])
         self.db.insert_signals(rows, now)
         for src, kind, ts, ttl, data in rows:
@@ -192,7 +195,7 @@ class Presence:
             self.engine.ingest(src, kind, ts, ttl, data)
             if kind == "video" and not data.get("private") and isinstance(data.get("site"), str) and isinstance(data.get("id"), str):
                 self.want_video_meta(data["site"], data["id"])
-            if kind == "desktop" and not (data.get("private") or data.get("hidden")) and isinstance(data.get("domain"), str) and public_host(data["domain"].lower()):
+            if kind == "desktop" and not data.get("private") and isinstance(data.get("domain"), str) and public_host(data["domain"].lower()):
                 self.want_site_icon(data["domain"].lower())
         self.update(now)
         return len(rows)

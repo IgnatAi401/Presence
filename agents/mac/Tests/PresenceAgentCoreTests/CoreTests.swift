@@ -283,7 +283,7 @@ import Testing
         let hidden = DesktopState(bundleId: "com.apple.Safari", app: "Safari", domain: "private.example",
                                   title: "私有页面", hidden: true)
         let data = hidden.signal(ts: 0, ttl: 300).data
-        #expect(data["hidden"] == .bool(true) && data["private"] == .bool(true))
+        #expect(data["private"] == .bool(true) && data["hidden"] == nil)
         #expect(data["domain"] == .string("private.example") && data["title"] == .string("私有页面"))
         var policy = ReportPolicy()
         #expect(policy.shouldSend(hidden, now: 0, heartbeatSec: 120, awaySec: 600) == true)

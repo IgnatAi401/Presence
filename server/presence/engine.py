@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .rules import REFERENCE, Classified, Rules
+from .signals import FEED_CATEGORY
 
 ANCHOR = "anchor"
 ACTIVITY = "activity"
@@ -75,11 +76,13 @@ class Item:
     activity: str | None = None  # 主状态合并了哪个活动（显示它的今日时长）
     project: str | None = None  # 仅私有
     domain: str | None = None  # 仅私有
-    app: str | None = None  # 手机前台 App 名；供公开页匹配本地图标
+    activity_name: str | None = None  # 合并进来的活动的简称（“今日科研”）
+    app: str | None = None  # 手机前台 App 名
+    icon: str | None = None  # 公开页本地图标：/icons/apps/<icon>.png
 
     def public(self) -> dict[str, Any]:
         out: dict[str, Any] = {"type": self.type, "category": self.category, "label": self.label}
-        for k in ("tier", "since", "until", "detail", "card", "activity", "app"):
+        for k in ("tier", "since", "until", "detail", "card", "activity", "activity_name", "app", "icon"):
             v = getattr(self, k)
             if v is not None:
                 out[k] = v
@@ -213,7 +216,7 @@ class MacTracker:
         self.expires = max(self.expires or 0, ts + ttl)
 
         host = (data.get("domain") or "").lower()
-        self.page = (host, data.get("title") or None) if public_host(host) and not (data.get("private") or data.get("hidden")) else None
+        self.page = (host, data.get("title") or None) if public_host(host) and not data.get("private") else None
 
         idle_sec = float(data.get("idle_sec") or 0)
         if data.get("locked"):
@@ -402,7 +405,7 @@ class MacTracker:
             out.append(self.e.activity_item(
                 a.category, self.current_since, card=card,
                 project=a.project, domain=a.domain,
-                values={"name": self.rules.names.get(a.domain or "")},
+                values={"name": self.rules.site_names.get(a.domain or "")},
             ))
         for lg in self.lingers.values():
             a = lg.act
@@ -410,7 +413,7 @@ class MacTracker:
             out.append(self.e.activity_item(
                 a.category, lg.since, slacking_since=lg.left_at if slacking else None,
                 project=a.project, domain=a.domain,
-                values={"name": self.rules.names.get(a.domain or "")},
+                values={"name": self.rules.site_names.get(a.domain or "")},
             ))
         return out
 
@@ -438,16 +441,17 @@ class Feed:
 
 def _feed_spec(kind: str, data: dict) -> tuple[str, bool, tuple] | None:
     """返回 (类别, 是否进行中, 身份)；身份变了就开新片段（例如换歌）。"""
-    if kind == "music":
-        return "music", data.get("state") == "playing", (data.get("title"), data.get("artist"))
-    if kind == "video":
+    category = FEED_CATEGORY.get(kind)
+    if category == "music":
+        return category, data.get("state") == "playing", (data.get("title"), data.get("artist"))
+    if category == "video":
         # 暂停着（看完了）但在看评论区，也算还在看
         active = data.get("state") == "playing" or data.get("viewing") == "comments"
-        return "video", active, (data.get("site"), data.get("id"), data.get("page"))
-    if kind == "game":
-        return "game", data.get("event", "start") != "stop", (data.get("exe") or data.get("name"),)
-    if kind == "phone_app":
-        return "phone", data.get("event", "open") != "close", (data.get("app"),)
+        return category, active, (data.get("site"), data.get("id"), data.get("page"))
+    if category == "game":
+        return category, data.get("event", "start") != "stop", (data.get("exe") or data.get("name"),)
+    if category == "phone":
+        return category, data.get("event", "open") != "close", (data.get("app"),)
     return None
 
 
@@ -613,30 +617,22 @@ class Engine:
             self.ended[key] = f
 
     def _manual(self, source: str, ts: float, data: dict) -> None:
+        """data 已由 signals.normalize 翻译成 {state, action}；action 为 stop 且没有 state 时结束全部。"""
         state = data.get("state")
         t = self.timing
-        if state == "clear":
-            for m in list(self.manual.values()):
-                self.end_manual(m, ts)
-        elif state == "leave_office":
-            if m := self.manual.get("office"):
-                self.end_manual(m, ts)
-        elif state == "stop_out":
-            if m := self.manual.get("out"):
-                self.end_manual(m, min(ts, m.expires_at))
-        elif state == "stop_custom":
-            if m := self.manual.get("custom"):
-                self.end_manual(m, min(ts, m.expires_at))
-        elif state in ("wake", "stop_eat"):
-            m = self.manual.get("anchor")
-            target = "sleep" if state == "wake" else "eat"
-            if m and m.state == target:
-                self.end_manual(m, ts)
-        elif state == "cancel_class":
-            for c in self.courses:
-                if c.start <= ts < c.end:
-                    self.cancelled.add(c.event_id)
-            self._sync_courses(ts)
+        if data.get("action") == "stop":
+            if state is None:
+                for m in list(self.manual.values()):
+                    self.end_manual(m, ts)
+            elif state == "class":
+                for c in self.courses:
+                    if c.start <= ts < c.end:
+                        self.cancelled.add(c.event_id)
+                self._sync_courses(ts)
+            elif state in MANUAL_SLOT:
+                m = self.manual.get(MANUAL_SLOT[state])
+                if m and m.state == state:  # 吃饭和睡觉共用一个槽位，只结束说到的那个
+                    self.end_manual(m, min(ts, m.expires_at))
         elif state in MANUAL_SLOT:
             minutes = data.get("minutes")
             if state in ("sleep", "office"):
@@ -726,8 +722,8 @@ class Engine:
         label = _fmt(d.label, **(values or {})) if d else category
         if category == "video" and values and values.get("name"):
             label = f"看 {values['name']}"  # 主状态前面有“正在”，这里不再写“在”
-        if category == "phone" and values:
-            label = self.rules.phone_apps.get(values.get("app"), label)
+        if category == "phone" and values and (app := self.rules.phone_apps.get(values.get("app") or "")):
+            label, kw["icon"] = app.label, app.icon
         if d and d.show_project and kw.get("project") and not kw.get("detail"):
             kw["detail"] = kw["project"]  # 搞科研 / 搞开发时公开工作区文件夹名
         return Item(type=ACTIVITY, category=category, label=label or category, since=since,
@@ -795,6 +791,7 @@ class Engine:
             return
         side.remove(it)
         main.activity = d.activity
+        main.activity_name = self.rules.short(d.activity)
         main.slacking_since = it.slacking_since
         main.project = it.project
         main.detail = it.detail
@@ -804,6 +801,7 @@ class Engine:
         if f.category == "music":
             card = {k: d.get(k) for k in ("player", "title", "artist", "album", "state", "position", "duration")}
             card["cover_hash"] = d.get("cover_hash")
+            card["player_name"] = self.rules.players.get(d.get("player") or "")
             card["updated_at"] = f.data_ts
             card["session_since"] = f.session  # 连续听歌的起点
             return self.activity_item("music", f.since, values={"title": d.get("title")}, card=card)
@@ -811,7 +809,8 @@ class Engine:
             card = {k: d.get(k) for k in ("site", "id", "page", "state", "position", "duration", "rate", "viewing")}
             card["updated_at"] = f.data_ts
             card["session_since"] = f.session  # 连续看视频的起点：换视频、余温内继续都接着算
-            name = {"bilibili": "B站", "youtube": "YouTube"}.get(d.get("site") or "")
+            name = self.rules.video_sites.get(d.get("site") or "")
+            card["site_name"] = name
             # 在看评论区时标题不变，只在卡片小字里注明（card.viewing）
             return self.activity_item("video", f.since, values={"name": name}, card=card)
         if f.category == "game":

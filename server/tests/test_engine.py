@@ -1,11 +1,11 @@
 """用模拟信号序列测试状态引擎（时间单位：秒，从 T0 开始）。"""
 
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from presence.engine import Course, Engine
+from presence.signals import normalize
 from presence.rules import Rules
 
 RULES = Rules.load(Path(__file__).resolve().parent.parent / "config" / "rules.yaml")
@@ -28,11 +28,11 @@ class Sim:
         return T0 + t
 
     def mac(self, t, data, idle=0, ttl=3600):
-        self.e.ingest("mac", "desktop", self.at(t), ttl, {**data, "idle_sec": idle})
+        self.e.ingest("mac", "desktop", self.at(t), ttl, normalize("desktop", {**data, "idle_sec": idle}))
         return self
 
     def manual(self, t, state, **kw):
-        self.e.ingest("iphone", "manual", self.at(t), 60, {"state": state, **kw})
+        self.e.ingest("iphone", "manual", self.at(t), 60, normalize("manual", {"state": state, **kw}))
         return self
 
     def tick(self, t):
@@ -81,11 +81,11 @@ def test_project_overrides_app_default():
     assert s.main.category == "dev"
 
 
-def test_project_category_from_agent_and_rules():
-    rules = replace(RULES, projects={"thesis-sim": "research"})
-    assert rules.classify_desktop({**VSCODE, "project": "thesis-sim"}).category == "research"
-    # 小工具里选的优先于 rules.yaml
-    assert rules.classify_desktop({**VSCODE, "project": "thesis-sim", "category": "dev"}).category == "dev"
+def test_project_category_from_agent():
+    assert RULES.classify_desktop({**VSCODE, "project": "thesis-sim", "category": "research"}).category == "research"
+    # 小工具里没选的项目按 App 默认值算
+    assert RULES.classify_desktop({**MATLAB, "project": "thesis-sim"}).category == "research"
+    assert RULES.classify_desktop({**VSCODE, "project": "thesis-sim"}).category == "dev"
     # 只接受科研 / 开发这类项目活动；没有项目名时不用
     assert RULES.classify_desktop({**MATLAB, "project": "x", "category": "game"}).category == "research"
     assert RULES.classify_desktop({**VSCODE, "category": "research"}).category == "dev"

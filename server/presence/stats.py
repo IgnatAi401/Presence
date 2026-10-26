@@ -97,6 +97,7 @@ def today(db: DB, rules: Rules, now: float, tz: ZoneInfo, start_hour: int) -> di
         "start": a,
         "end": b,
         "timeline": timeline(segs, rules),
-        "totals": totals(segs),
+        "totals": (t := totals(segs)),
+        "names": {c: rules.short(c) for line in t.values() for c in line},  # 各类别的简称
         "updated_at": now,
     }

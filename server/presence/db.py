@@ -243,7 +243,7 @@ class DB:
         domain = domain.lower() if isinstance(domain, str) and domain else None
         title = data.get("title")
         title = title[:200] if isinstance(title, str) and title else None
-        private = bool(data.get("private") or data.get("hidden"))
+        private = bool(data.get("private"))
         if row is not None:
             if domain and (row["domain"], row["title"], row["private"]) == (domain, title, private):
                 self.conn.execute("UPDATE web_log SET last_seen = ?, expires = ? WHERE id = ?",

@@ -24,47 +24,47 @@ activities:
   phone: { tier: 4, short: "刷手机", label: "在刷 {app}" }
   music: { tier: 4, short: "听歌", label: "听《{title}》", keep_min: 1 }
 
-# 手机 App 的公开文案；App 名与快捷指令上报一致，未知 App 沿用“在刷 {app}”。
+# 手机 App：键是快捷指令上报的 App 名（已装的快捷指令按这个名字上报，不要改键）
+#   label：公开文案（未列出的 App 沿用“在刷 {app}”）；icon：web/public/icons/apps/<icon>.png
 phone_apps:
-  X: "在 X 上刷动态"
-  Instagram: "在 IG 看看大家的日常"
-  小黑盒: "在刷小黑盒"
-  小红书: "在小红书翻翻生活灵感"
-  抖音: "在抖音刷短视频"
-  TikTok: "在 TikTok 刷短视频"
-  Reddit: "在 Reddit 逛社区"
-  Apple Music: "在 Apple Music 上听音乐"
-  Discord: "在 Discord 里聊天"
-  Telegram: "在 Telegram 看消息、聊聊天"
-  WhatsApp: "在 WhatsApp 和朋友聊聊天"
-  Facebook: "在 Facebook 看看新动态"
-  Safari: "在用 Safari 逛网页"
-  B站: "在刷 B站"
-  YouTube: "在 YouTube 看视频"
-  ChatGPT: "在和 ChatGPT 聊天"
-  DeepSeek: "在和 DeepSeek 聊天"
-  Claude: "在和 Claude 聊天"
-  淘宝: "在淘宝淘点好东西"
-  京东: "在京东逛逛"
-  闲鱼: "在闲鱼淘二手"
+  X: { label: "在 X 上刷动态", icon: x }
+  Instagram: { label: "在 IG 看看大家的日常", icon: instagram }
+  小黑盒: { label: "在刷小黑盒", icon: xiaoheihe }
+  小红书: { label: "在小红书翻翻生活灵感", icon: xiaohongshu }
+  抖音: { label: "在抖音刷短视频", icon: douyin }
+  TikTok: { label: "在 TikTok 刷短视频", icon: tiktok }
+  Reddit: { label: "在 Reddit 逛社区", icon: reddit }
+  Apple Music: { label: "在 Apple Music 上听音乐", icon: apple-music }
+  Discord: { label: "在 Discord 里聊天", icon: discord }
+  Telegram: { label: "在 Telegram 看消息、聊聊天", icon: telegram }
+  WhatsApp: { label: "在 WhatsApp 和朋友聊聊天", icon: whatsapp }
+  Facebook: { label: "在 Facebook 看看新动态", icon: facebook }
+  Safari: { label: "在用 Safari 逛网页", icon: safari }
+  B站: { label: "在刷 B站", icon: bilibili }
+  YouTube: { label: "在 YouTube 看视频", icon: youtube }
+  ChatGPT: { label: "在和 ChatGPT 聊天", icon: chatgpt }
+  DeepSeek: { label: "在和 DeepSeek 聊天", icon: deepseek }
+  Claude: { label: "在和 Claude 聊天", icon: claude }
+  淘宝: { label: "在淘宝淘点好东西", icon: taobao }
+  京东: { label: "在京东逛逛", icon: jd }
+  闲鱼: { label: "在闲鱼淘二手", icon: xianyu }
 
-# 1. 项目匹配：从白名单 App 的窗口标题里提取出的项目名
-#    哪个项目算科研、哪个算开发，现在在 Mac 小工具的 设置 → 项目 里选，随信号上报（data.category），优先于这里。
-#    这里仍然有效，作为小工具没选时的后备，例如 thesis-sim: research
-projects: {}
+# Mac 前台的分类顺序：项目 → 域名 → App 默认值；都没命中时沿用上一个活动。
+#   项目算科研还是开发在 Mac 小工具的 设置 → 项目 里选，随信号上报（data.category）；没选的项目按 App 默认值算。
 
-# 2. 域名匹配（Safari 在前台时）；子域名自动匹配，例如 www.bilibili.com
+# 域名匹配（Safari 在前台时）；子域名自动匹配，例如 www.bilibili.com
 #    reference：资料类，继承最近 10 分钟的正事；未列出的网页同样处理
+#    写成 { category, name, video } 时：name 是公开显示名，video 是浏览器上报视频时的 site 键
 domains:
   overleaf.com: research
   arxiv.org: reference
   scholar.google.com: reference
   github.com: reference
   stackoverflow.com: reference
-  bilibili.com: video
-  youtube.com: video
+  bilibili.com: { category: video, name: B站, video: bilibili }
+  youtube.com: { category: video, name: YouTube, video: youtube }
 
-# 3. App 默认值（按 bundle id）
+# App 默认值（按 bundle id）
 apps:
   com.mathworks.matlab: research
   com.microsoft.Powerpoint: research
@@ -74,7 +74,7 @@ apps:
   com.anthropic.claudefordesktop: dev
   com.openai.codex: dev
 
-# 显示用的名字（视频网站、手机 App）
-names:
-  bilibili.com: B站
-  youtube.com: YouTube
+# 音乐卡片上的播放器名，键是信号里的 player
+players:
+  apple_music: Apple Music
+  aimp: AIMP

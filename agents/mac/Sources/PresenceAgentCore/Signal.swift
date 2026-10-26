@@ -97,10 +97,7 @@ public struct DesktopState: Equatable, Sendable {
         }
         if let domain { data["domain"] = .string(domain) }
         if let title, !title.isEmpty { data["title"] = .string(String(title.prefix(200))) }
-        if hidden {
-            data["private"] = .bool(true)
-            data["hidden"] = .bool(true) // 兼容旧服务器，避免升级期间公开详情
-        }
+        if hidden { data["private"] = .bool(true) }
         if locked { data["locked"] = .bool(true) }
         return Signal(kind: "desktop", ts: ts, ttl: ttl, data: data)
     }

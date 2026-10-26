@@ -12,23 +12,8 @@ const KICKER = {
   activity: "正在",
   idle: "此刻",
 };
-const NAMES = {
-  class: "上课", eat: "吃饭", sleep: "睡觉", office: "办公室", research: "科研", dev: "开发", game: "游戏", out: "出去玩",
-  custom: "自定义", video: "看视频", browse: "上网", phone: "刷手机", music: "听歌",
-};
-
+// 类别简称、App 图标、网站和播放器的名字都由服务器按 rules.yaml 给出，这里不再另存一份
 const CARD_ROW = { music: "在听音乐", game: "在玩游戏" };
-const VIDEO_SITES = { bilibili: "B站", youtube: "YouTube" };
-// 音乐卡片封面角上的播放器图标，键是信号里的 player
-const PLAYERS = { apple_music: "Apple Music", aimp: "AIMP" };
-// 固定映射到同站静态图标，不从状态文案猜 App，也不让浏览器请求第三方图标服务。
-const PHONE_ICONS = {
-  X: "x", Instagram: "instagram", 小黑盒: "xiaoheihe", 小红书: "xiaohongshu",
-  抖音: "douyin", TikTok: "tiktok", Reddit: "reddit", "Apple Music": "apple-music",
-  Discord: "discord", Safari: "safari", B站: "bilibili", YouTube: "youtube",
-  Telegram: "telegram", WhatsApp: "whatsapp", Facebook: "facebook",
-  ChatGPT: "chatgpt", DeepSeek: "deepseek", Claude: "claude", 淘宝: "taobao", 京东: "jd", 闲鱼: "xianyu",
-};
 
 const $ = (id) => document.getElementById(id);
 const hue = (category) => `var(--c-${category}, var(--amber))`;
@@ -53,8 +38,9 @@ function h(tag, attrs = {}, ...children) {
 }
 
 const phoneIcons = new Map();
+// 只用同站静态图标（服务器给的 icon），不让浏览器请求第三方图标服务
 function phoneIcon(item, slot) {
-  const slug = item.category === "phone" && PHONE_ICONS[item.app];
+  const slug = item.category === "phone" && item.icon;
   if (!slug) return null;
   const key = `${slot}:${slug}`;
   let icon = phoneIcons.get(key);
@@ -101,7 +87,7 @@ function metaText(item, t) {
   }
   if (item.today_sec != null) {
     // 合并了活动的锚定状态（在办公室搞科研）：已持续是在办公室的时长，今日时长是科研的
-    const what = item.activity ? `今日${NAMES[item.activity] || ""}` : "今日已";
+    const what = item.activity ? `今日${item.activity_name || ""}` : "今日已";
     const live = item.slacking ? 0 : t - state.updated_at; // 摸鱼时正事时长不走
     parts.push(`${what} ${dur(item.today_sec + live)}`);
   }
@@ -127,12 +113,12 @@ const badgeWidth = (text) => Math.ceil([...text].reduce((w, ch) => w + (ch.charC
 
 // 每秒重画时复用同一个封面节点：新建的图片要重新解码，会一闪一闪
 const covers = new Map();
-function coverNode(url, player) {
+function coverNode(url, player, playerName) {
   const key = `${url || ""}|${player || ""}`;
   let el = covers.get(key);
   if (!el) {
     el = h("div", { class: "cover", style: url ? { backgroundImage: `url("${encodeURI(mediaUrl(url))}")` } : {} },
-      player ? h("img", { class: `player ${player}`, src: `/icons/${player.replace("_", "-")}.svg`, alt: PLAYERS[player], title: PLAYERS[player] }) : null);
+      player ? h("img", { class: `player ${player}`, src: `/icons/${player.replace("_", "-")}.svg`, alt: playerName, title: playerName }) : null);
     covers.set(key, el);
     if (covers.size > 50) covers.delete(covers.keys().next().value); // 只留最近建的 50 个
   }
@@ -142,8 +128,8 @@ function coverNode(url, player) {
 function renderCard(item, t) {
   const c = item.card;
   if (!c) return null;
-  const player = item.category === "music" ? PLAYERS[c.player] : null;
-  const cover = coverNode(c.cover, player && c.player);
+  const player = item.category === "music" ? c.player_name : null;
+  const cover = coverNode(c.cover, player && c.player, player);
   let title = item.label;
   let sub = "";
   let href = null;
@@ -164,7 +150,7 @@ function renderCard(item, t) {
     title = c.title || item.label;
     const speed = c.rate && c.rate !== 1 ? `${c.rate}×` : null;
     const status = readingComments(c) ? "在看评论" : c.state === "paused" ? "已暂停" : null;
-    sub = [c.owner || VIDEO_SITES[c.site], speed, status].filter(Boolean).join(" · ");
+    sub = [c.owner || c.site_name, speed, status].filter(Boolean).join(" · ");
     href = c.url || null;
   } else if (item.category === "game") {
     title = c.name || item.label;
@@ -245,7 +231,7 @@ function renderToday(t) {
     .filter(([, sec]) => sec >= 60)
     .sort((a, b) => b[1] - a[1]);
   $("totals").replaceChildren(...rows.map(([cat, sec]) =>
-    h("li", { "--hue": hue(cat) }, h("b", {}, NAMES[cat] || cat), h("span", {}, dur(sec)))));
+    h("li", { "--hue": hue(cat) }, h("b", {}, today.names?.[cat] || cat), h("span", {}, dur(sec)))));
 }
 
 function render() {

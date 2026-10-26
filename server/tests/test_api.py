@@ -10,6 +10,7 @@ from presence.config import Settings
 from presence.sources.web import Icon
 from presence.main import create_app
 from presence.rules import Rules
+from presence.signals import normalize
 from presence.stats import day_bounds
 
 RULES = Rules.load(Path(__file__).resolve().parent.parent / "config" / "rules.yaml")
@@ -541,7 +542,8 @@ def test_video_privacy_toggle_hides_active_and_linger(env):
 def test_web_history_lock_idle_restart_and_legacy_privacy(env):
     client, clock, _ = env
     db = client.app.state.presence.db
-    data = {"bundle_id": "com.apple.Safari", "domain": "private.example", "title": "私有", "hidden": True}
+    # 旧版小工具只发 hidden，入口翻译成 private 后再记录
+    data = normalize("desktop", {"bundle_id": "com.apple.Safari", "domain": "private.example", "title": "私有", "hidden": True})
     db.record_web("mac", "desktop", T0, 3600, data, 600)
     db.record_web("mac", "desktop", T0 + 60, 3600, {**data, "locked": True}, 600)
     db.record_web("mac", "desktop", T0 + 100, 3600, data, 600)
