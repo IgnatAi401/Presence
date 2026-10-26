@@ -16,6 +16,8 @@ from .signals import FEED_CATEGORY
 
 ANCHOR = "anchor"
 ACTIVITY = "activity"
+PAGE = "page"  # 开发、科研时看的网页，单独显示的卡片
+PAGE_CATEGORIES = {"browse", "video"}  # 网页本身就是这件事：卡片直接附在活动上
 
 
 @dataclass
@@ -193,6 +195,7 @@ class MacTracker:
         self.pending_since: float | None = None
         self.last_serious: tuple[MacAct, float] | None = None  # (正事, 结束时间)
         self.page: tuple[str, str | None] | None = None  # Safari 此刻在前台显示的网页 (域名, 标题)
+        self.page_since: float | None = None  # 开始看这个域名的时间（单独的网页卡片显示时长）
 
     @property
     def rules(self) -> Rules:
@@ -216,7 +219,10 @@ class MacTracker:
         self.expires = max(self.expires or 0, ts + ttl)
 
         host = (data.get("domain") or "").lower()
-        self.page = (host, data.get("title") or None) if public_host(host) and not data.get("private") else None
+        page = (host, data.get("title") or None) if public_host(host) and not data.get("private") else None
+        if page is None or self.page is None or page[0] != self.page[0]:
+            self.page_since = ts if page else None
+        self.page = page
 
         idle_sec = float(data.get("idle_sec") or 0)
         if data.get("locked"):
@@ -377,7 +383,7 @@ class MacTracker:
 
     def _stop(self, at: float) -> None:
         """离开电脑：不留余温，所有 Mac 活动在空闲开始时结束。"""
-        self.page = None
+        self.page = self.page_since = None
         if self.current_iv is not None:
             at = max(at, self.current_iv.start)
         for t in list(self.lingers):
@@ -397,16 +403,21 @@ class MacTracker:
         if self.current is not None:
             a = self.current
             cur_tier = self.rules.tier(a.category)
-            # Safari 在前台、且显示的就是这个活动的网页时附上网页卡片（标题、域名、图标）。
-            # 刚切到别的网页、还没停够 enter_sec，或切到了没有网址的页面 / 别的 App 时不附，免得显示旧网页
+            # Safari 在前台、且显示的就是这个活动的网页时显示网页卡片（标题、域名、图标）。
+            # 刚切到别的网页、还没停够 enter_sec，或切到了没有网址的页面 / 别的 App 时不显示，免得显示旧网页
             card = None
             if self.page and a.host == self.page[0]:
                 card = {"kind": "web", "title": self.page[1], "domain": self.page[0]}
+            merged = card if a.category in PAGE_CATEGORIES else None
             out.append(self.e.activity_item(
-                a.category, self.current_since, card=card,
+                a.category, self.current_since, card=merged,
                 project=a.project, domain=a.domain,
                 values={"name": self.rules.site_names.get(a.domain or "")},
             ))
+            if card and merged is None:
+                # 开发、科研时看的网页单独一张卡片；只是显示，不算摸鱼，时长仍记在正事上
+                out.append(Item(type=PAGE, category="browse", label=self.rules.short("browse"),
+                                since=self.page_since, tier=99, card=card))
         for lg in self.lingers.values():
             a = lg.act
             slacking = self.rules.is_serious(a.category) and self.rules.tier(a.category) < cur_tier
