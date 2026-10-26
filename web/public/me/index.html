@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Me · Now</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0B0908">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/vt323.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/pages.css">
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <a class="brand" href="https://ignat.ai">ignat.ai</a>
+      <span class="sep">/</span>
+      <a class="ch" href="/">now.</a>
+      <span class="sep">/</span>
+      <span>me</span>
+    </header>
+
+    <!-- 页面本身不含数据；数据都要登录后从 api.ignat.ai 取 -->
+    <section class="gate" id="gate">
+      <p id="gate-text">正在确认登录……</p>
+      <a class="btn" id="login" href="https://401.ignat.ai/" hidden>去登录</a>
+    </section>
+
+    <div id="app" hidden>
+      <section class="panel" aria-labelledby="day-h">
+        <div class="panel-head">
+          <h2 id="day-h">完整时间线</h2>
+          <span class="day-nav">
+            <button type="button" id="prev" aria-label="前一天">‹</button>
+            <input type="date" id="date" aria-label="选择日期">
+            <button type="button" id="next" aria-label="后一天">›</button>
+          </span>
+        </div>
+        <div class="lanes" id="lanes"></div>
+        <div class="ticks"><span>04:00</span><span>10:00</span><span>16:00</span><span>22:00</span><span>04:00</span></div>
+        <p class="legend-note"><span><i class="slack"></i>摸鱼中（不计入正事）</span></p>
+        <ul class="totals" id="totals"></ul>
+        <div class="two">
+          <div><h3>看过的视频 · 听过的歌 · 手机</h3><ul class="log" id="media"></ul></div>
+          <div><h3>浏览记录</h3><ul class="log" id="web"></ul></div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="sum-h">
+        <div class="panel-head">
+          <h2 id="sum-h">汇总</h2>
+          <span class="range" role="group" aria-label="时间范围">
+            <input type="date" id="from" aria-label="开始日期">
+            <span>—</span>
+            <input type="date" id="to" aria-label="结束日期">
+          </span>
+        </div>
+        <div class="chips" id="presets" role="group" aria-label="快捷范围">
+          <button type="button" data-days="1">今天</button>
+          <button type="button" data-days="7" aria-pressed="true">7 天</button>
+          <button type="button" data-days="30">30 天</button>
+          <button type="button" data-days="182">半年</button>
+        </div>
+
+        <h3>专注度</h3>
+        <div class="stats" id="focus-stats"></div>
+        <div class="cols" id="focus-cols"></div>
+        <h3>主要摸鱼渠道</h3>
+        <ol class="rank" id="channels"></ol>
+
+        <h3>排行</h3>
+        <div class="filters">
+          <span class="seg" id="groups" role="group" aria-label="按什么排行">
+            <button type="button" data-group="category" aria-pressed="true">类别</button>
+            <button type="button" data-group="project">项目</button>
+            <button type="button" data-group="site">网站</button>
+            <button type="button" data-group="video">视频</button>
+            <button type="button" data-group="track">歌</button>
+            <button type="button" data-group="game">游戏</button>
+            <button type="button" data-group="app">手机 App</button>
+          </span>
+          <label>只看 <select id="during" aria-label="只看某个状态期间">
+            <option value="">全部时间</option>
+            <option value="class">上课时</option>
+            <option value="eat">吃饭时</option>
+            <option value="office">在办公室时</option>
+            <option value="sleep">睡觉时</option>
+          </select></label>
+        </div>
+        <ol class="rank" id="summary"></ol>
+
+        <h3>导出</h3>
+        <div class="actions">
+          <a class="btn" id="export-csv" href="#">CSV（片段）</a>
+          <a class="btn" id="export-json" href="#">JSON（全部）</a>
+        </div>
+      </section>
+
+    </div>
+
+    <footer class="foot">
+      <a href="/">此刻</a>
+      <a href="/history">历史</a>
+      <a href="https://401.ignat.ai/">退出登录</a>
+    </footer>
+  </main>
+  <script src="/me/me.js" type="module"></script>
+</body>
+</html>

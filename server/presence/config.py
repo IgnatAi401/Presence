@@ -41,6 +41,10 @@ class Settings:
     day_start_hour: int = 4
     db_path: Path = SERVER_DIR / "data" / "presence.db"
     public_origins: list[str] = field(default_factory=lambda: ["https://now.ignat.ai", "https://ignat.ai"])
+    private_origins: list[str] = field(default_factory=lambda: ["https://now.ignat.ai"])  # 可携带登录 Cookie 读私有接口
+    gate_secret: str = ""  # 网关密钥：ignat-auth 转发时放在 X-Ignat-Gate 里；空着时私有接口一律 404
+    dev_private: bool = False  # 仅本机调试：不经过 Cloudflare 的请求（没有 CF-Connecting-IP）不检查网关密钥
+    backup_keep: int = 30  # 每日备份保留几份；0 表示不备份
     media_base: str = "https://api.ignat.ai/presence/api/media"
     media_max_bytes: int = 2 * 1024 * 1024  # 设备上传封面的大小上限
     rate_per_minute: int = 60
@@ -79,6 +83,11 @@ class Settings:
             db_path=db_path,
             public_origins=list(server.get("public_origins", ["https://now.ignat.ai", "https://ignat.ai"]))
             + list(server.get("extra_origins", [])),
+            private_origins=list(server.get("private_origins", ["https://now.ignat.ai"]))
+            + list(server.get("extra_origins", [])),
+            gate_secret=str(server.get("gate_secret", "")),
+            dev_private=bool(server.get("dev_private", False)),
+            backup_keep=int(server.get("backup_keep", 30)),
             media_base=server.get("media_base", "https://api.ignat.ai/presence/api/media"),
             media_max_bytes=int(server.get("media_max_bytes", 2 * 1024 * 1024)),
             rate_per_minute=int(server.get("rate_per_minute", 60)),

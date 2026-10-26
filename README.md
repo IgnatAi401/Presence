@@ -22,7 +22,9 @@ uv run pytest                                           # 测试
 - 分类规则、活动等级和各处显示用的名字 / 图标（手机 App、视频网站、播放器）：`server/config/rules.yaml`，改完重启即可，网页和小工具不用改。哪个项目算科研、哪个算开发在 Mac 小工具的 设置 → 项目 里选，随信号上报。
 - 各设备能上报哪些信号、旧写法怎么兼容：见 [docs/signals.md](docs/signals.md)。
 - 读取课表需要日历权限，先单独运行一次，在弹窗里允许：`uv run python -m presence.sources.calendar 课程表`
-- 接口：`/presence/api/signal`、`PUT media/{sha256}`（设备令牌）、`media/{sha256}`（封面图片，存在 `data/media/`）、`now`、`stream`（SSE）、`today`、`health`。
+- 公开接口：`/presence/api/signal`、`PUT media/{sha256}`（设备令牌）、`media/{sha256}`（封面图片，存在 `data/media/`）、`now`、`stream`（SSE）、`today`、`day?date=`、`history?from=&to=`（每日各类别时长、正事时长、游戏和听歌榜，默认最近半年）、`health`。
+- 私有接口 `private/*`：`day?date=`（完整片段、播放和浏览记录）、`summary?from=&to=&group=category|project|site|video|track|game|app&during=class`、`focus?from=&to=`、`export?from=&to=&format=csv|json`。只接受带正确 `X-Ignat-Gate` 请求头（`settings.toml` 的 `gate_secret`，与 ignat-auth 的 `ORIGIN_SECRET` 相同）的请求，否则 404；`gate_secret` 空着时私有接口全部关闭。
+- 每天第一次推进时把数据库备份到 `data/backups/presence-YYYYMMDD.db`，保留 30 份；原始信号保留 30 天。
 
 模拟一条上报：
 
@@ -42,3 +44,11 @@ pnpm deploy     # 部署到 now.ignat.ai
 ```
 
 本地调试时，需要在 `settings.toml` 的 `extra_origins` 里加入 `http://localhost:8788`。也可以用 `?api=` 参数指定接口地址。
+
+| 页面 | 内容 |
+| --- | --- |
+| `/` | 此刻状态、今日时间线 |
+| `/history` | 公开历史：正事热力图、任选一天的时间线、按周 / 月趋势、游戏和听歌榜 |
+| `/me` | 私有回看（需在 401.ignat.ai 登录）：每条线一行的完整时间线、播放和浏览记录、专注度、排行（可只看上课 / 吃饭时）、导出 |
+
+本地调试 `/me`：在本机的 `settings.toml` 里设 `dev_private = true`（不经过 Cloudflare 的请求不检查网关密钥），**服务器 Mac 上必须保持 false**。

@@ -305,6 +305,15 @@ class DB:
             (end, end, start, type_, end, start),
         ).fetchall()
 
+    def media_rows(self, types: list[str], start: float, end: float, include_private: bool) -> list[sqlite3.Row]:
+        """[start, end) 内的原始播放片段；公开统计不含私有的。"""
+        marks = ", ".join("?" * len(types))
+        return self.conn.execute(
+            f"SELECT * FROM media_log WHERE type IN ({marks}) AND start < ? AND (end IS NULL OR end > ?)"
+            + ("" if include_private else " AND private = 0") + " ORDER BY start",
+            (*types, end, start),
+        ).fetchall()
+
     def media_history(self, type_: str, start: float, end: float) -> list[sqlite3.Row]:
         """[start, end) 内的播放记录，按开始时间倒序；暂停拆开的几段合成一次播放。"""
         return self.conn.execute(
@@ -354,6 +363,19 @@ class DB:
             )
             WHERE category = 'out' AND id IN (SELECT id FROM manual_states WHERE state = 'out')
         """)
+
+    # -- 备份
+
+    def backup_to(self, dest: Path) -> None:
+        """用 SQLite 在线备份写到 dest（先写临时文件再改名，不会留下半截备份）。"""
+        tmp = dest.with_name(f".{dest.name}.tmp")
+        tmp.unlink(missing_ok=True)
+        out = sqlite3.connect(str(tmp))
+        try:
+            self.conn.backup(out)
+        finally:
+            out.close()
+        tmp.replace(dest)
 
     # -- media_cache
 

@@ -6,7 +6,13 @@ timezone = "Asia/Shanghai"
 day_start_hour = 4                 # 一天从凌晨 4 点开始算
 db_path = "data/presence.db"       # 相对 server/ 目录
 public_origins = ["https://now.ignat.ai", "https://ignat.ai"]
-extra_origins = []                 # 本地调试页面的来源，例如 "http://localhost:8788"
+extra_origins = []                 # 本地调试页面的来源，例如 "http://localhost:8788"（公开和私有接口都允许）
+private_origins = ["https://now.ignat.ai"]   # 可以带登录 Cookie 读取私有接口（/me 页面）的来源
+# 网关密钥：和 ignat-auth 的 ORIGIN_SECRET 相同。空着时私有接口一律 404
+# 生成：uv run python -c "import secrets; print(secrets.token_urlsafe(32))"
+gate_secret = ""
+dev_private = false                # 仅本机调试 /me：不经过 Cloudflare 的请求不检查网关密钥。服务器 Mac 上保持 false
+backup_keep = 30                   # 每天第一次推进时把数据库备份到 data/backups/，保留最近几份；0 表示不备份
 media_base = "https://api.ignat.ai/presence/api/media"
 media_max_bytes = 2097152          # 设备上传封面的大小上限（字节）；图片存在数据库旁边的 media/ 目录
 rate_per_minute = 60               # 每台设备每分钟最多上报次数

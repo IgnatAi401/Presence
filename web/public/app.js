@@ -1,11 +1,6 @@
 // now.ignat.ai 公开状态页：先拉 /now 和 /today，再用 SSE 实时更新
 
-const params = new URLSearchParams(location.search);
-const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
-const PROD_API = "https://api.ignat.ai/presence/api";
-const API = params.get("api") || (LOCAL ? "http://127.0.0.1:8790/presence/api" : PROD_API);
-// 服务器给的封面地址写的是正式域名；本地调试时改成实际连接的接口
-const mediaUrl = (url) => (url.startsWith(`${PROD_API}/`) ? API + url.slice(PROD_API.length) : url);
+import { $, API, dur, getJSON, h, hue, mediaUrl, timelineBar, totalsList } from "./lib.js";
 
 const KICKER = {
   anchor: "此刻",
@@ -15,27 +10,12 @@ const KICKER = {
 // 类别简称、App 图标、网站和播放器的名字都由服务器按 rules.yaml 给出，这里不再另存一份
 const CARD_ROW = { music: "在听音乐", game: "在玩游戏" };
 
-const $ = (id) => document.getElementById(id);
-const hue = (category) => `var(--c-${category}, var(--amber))`;
-
 let state = null; // 最近一次 /now
 let today = null; // 最近一次 /today
 let receivedAt = 0; // 收到 state 时的本地时间（秒），用来推算进度
 let serverOffset = 0; // 服务器时间 − 本地时间
 
 const nowSec = () => Date.now() / 1000 + serverOffset;
-
-function h(tag, attrs = {}, ...children) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v == null) continue;
-    if (k === "style") Object.assign(el.style, v);
-    else if (k.startsWith("--")) el.style.setProperty(k, v);
-    else el.setAttribute(k, v);
-  }
-  for (const c of children.flat()) if (c != null) el.append(c);
-  return el;
-}
 
 const phoneIcons = new Map();
 // 只用同站静态图标（服务器给的 icon），不让浏览器请求第三方图标服务
@@ -53,18 +33,6 @@ function phoneIcon(item, slot) {
   }
   return icon;
 }
-
-function dur(sec) {
-  sec = Math.max(0, Math.floor(sec));
-  const hh = Math.floor(sec / 3600);
-  const mm = Math.floor((sec % 3600) / 60);
-  if (hh) return `${hh}h${String(mm).padStart(2, "0")}m`;
-  if (mm) return `${mm} 分钟`;
-  return `${sec} 秒`;
-}
-
-const clock = (ts) =>
-  new Date(ts * 1000).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 
 // 看完了在看评论区：视频暂停着，但人还在
 const readingComments = (card) => card?.viewing === "comments";
@@ -215,23 +183,10 @@ function renderSide(t) {
 
 function renderToday(t) {
   if (!today) return;
-  const span = today.end - today.start;
-  const bar = $("bar");
-  const cursor = $("cursor");
-  bar.replaceChildren(cursor, ...today.timeline.map((b) => h("span", {
-    class: "blk",
-    title: `${clock(b.start)}–${clock(b.end)} ${b.label}`,
-    "--hue": hue(b.category),
-    style: { left: `${((b.start - today.start) / span) * 100}%`, width: `${((b.end - b.start) / span) * 100}%` },
-  })));
-  cursor.style.left = `${Math.min(100, ((t - today.start) / span) * 100)}%`;
+  timelineBar($("bar"), today, today.timeline);
+  $("cursor").style.left = `${Math.min(100, ((t - today.start) / (today.end - today.start)) * 100)}%`;
   $("today-date").textContent = today.date;
-
-  const rows = [...Object.entries(today.totals.anchor), ...Object.entries(today.totals.activity)]
-    .filter(([, sec]) => sec >= 60)
-    .sort((a, b) => b[1] - a[1]);
-  $("totals").replaceChildren(...rows.map(([cat, sec]) =>
-    h("li", { "--hue": hue(cat) }, h("b", {}, today.names?.[cat] || cat), h("span", {}, dur(sec)))));
+  totalsList($("totals"), today.totals, today.names);
 }
 
 function render() {
@@ -255,12 +210,6 @@ function accept(data) {
   serverOffset = data.updated_at - receivedAt;
   render();
   if (prevMain !== `${data.main.category}|${data.main.label}`) loadToday();
-}
-
-async function getJSON(path) {
-  const r = await fetch(`${API}${path}`, { cache: "no-store" });
-  if (!r.ok) throw new Error(`${path} ${r.status}`);
-  return r.json();
 }
 
 async function loadToday() {

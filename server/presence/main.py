@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
@@ -53,6 +53,8 @@ VIDEO_META_RETRY_SEC = 3600  # 视频信息没查到时，过这么久再查
 SITE_ICON_RETRY_SEC = 86400  # 网站图标没取到时，过这么久再取
 DOMAIN = re.compile(r"[a-z0-9.-]{1,253}")
 STEAM_RETRY_SEC = 300  # 游戏封面没取到时，过这么久再取
+GATE_HEADER = "x-ignat-gate"
+HISTORY_DAYS = 182  # 公开历史默认查最近半年
 
 
 def sniff_image(data: bytes) -> str | None:
@@ -153,6 +155,7 @@ class Presence:
         self.game_covers: dict[str, tuple[str | None, float]] = {}
         self.cover_fetching: set[str] = set()
         self.tasks: set[asyncio.Task] = set()
+        self.backup_date: str | None = None
 
         last = self.db.last_signal_ts()
         n = self.db.close_dangling(last if last is not None else now)
@@ -437,9 +440,32 @@ class Presence:
         t = self.clock()
         return self.payload(self.engine.snapshot(t))
 
-    def today(self, now: float | None = None) -> dict[str, Any]:
+    def today(self, now: float | None = None, day: str | None = None) -> dict[str, Any]:
         now = self.clock() if now is None else now
-        return stats.today(self.db, self.rules, now, self.settings.tz, self.settings.day_start_hour)
+        return stats.today(self.db, self.rules, now, self.settings.tz, self.settings.day_start_hour,
+                           stats.parse_date(day) if day else None)
+
+    def days(self, frm: str | None, to: str | None, default_days: int) -> list:
+        return stats.date_range(frm, to, self.clock(), self.settings.tz, self.settings.day_start_hour, default_days)
+
+    # -- 备份
+
+    def backup_if_due(self, now: float) -> Path | None:
+        """每天（按凌晨 4 点切分）第一次调用时备份数据库，只留最近 backup_keep 份。"""
+        keep = self.settings.backup_keep
+        date = stats.day_bounds(now, self.settings.tz, self.settings.day_start_hour)[2]
+        if keep <= 0 or date == self.backup_date or str(self.settings.db_path) == ":memory:":
+            return None
+        d = self.settings.db_path.parent / "backups"
+        dest = d / f"presence-{date.replace('-', '')}.db"
+        if not dest.exists():
+            d.mkdir(parents=True, exist_ok=True)
+            self.db.backup_to(dest)
+            log.info("已备份数据库：%s", dest.name)
+            for old in sorted(d.glob("presence-*.db"))[:-keep]:
+                old.unlink()
+        self.backup_date = date
+        return dest
 
     # -- 课表
 
@@ -472,6 +498,7 @@ async def _ticker(p: Presence) -> None:
             if now - last_prune > 3600:
                 p.db.prune_signals(now - SIGNAL_KEEP_DAYS * 86400)
                 last_prune = now
+            p.backup_if_due(now)
         except Exception:
             log.exception("定时任务出错")
 
@@ -548,23 +575,47 @@ def create_app(
     app = FastAPI(title="Presence", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     api = APIRouter(prefix=PREFIX)
     public_origins = set(settings.public_origins)
+    private_origins = set(settings.private_origins)
 
     @app.middleware("http")
     async def cors(request: Request, call_next):
         origin = request.headers.get("origin")
-        path = request.url.path
-        public = path.startswith(PREFIX) and not path.startswith(f"{PREFIX}/private") and path != f"{PREFIX}/signal"
-        allowed = public and origin in public_origins
+        path = request.url.path  # 已解码：%70rivate 也算 private
+        private = path.startswith(f"{PREFIX}/private")
+        public = path.startswith(PREFIX) and not private and path != f"{PREFIX}/signal"
+        allowed = (public and origin in public_origins) or (private and origin in private_origins)
         if request.method == "OPTIONS" and allowed:
+            # 正式环境里私有接口的预检由 ignat-auth 回答，这里给本机调试用
             resp: Response = Response(status_code=204)
             resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-            resp.headers["Access-Control-Max-Age"] = "86400"
+            resp.headers["Access-Control-Max-Age"] = "600" if private else "86400"
         else:
             resp = await call_next(request)
         if allowed:
             resp.headers["Access-Control-Allow-Origin"] = origin
+            if private:
+                resp.headers["Access-Control-Allow-Credentials"] = "true"
         resp.headers.setdefault("Vary", "Origin")
         return resp
+
+    def gate(request: Request) -> None:
+        """私有接口只接受经过 ignat-auth 登录检查的请求（带正确的网关密钥），否则当作不存在。"""
+        if settings.dev_private and "cf-connecting-ip" not in request.headers:
+            return
+        given = request.headers.get(GATE_HEADER, "")
+        if not settings.gate_secret or not hmac.compare_digest(given.encode(), settings.gate_secret.encode()):
+            raise HTTPException(404, "Not Found")
+
+    private = APIRouter(prefix="/private", dependencies=[Depends(gate)])
+
+    def bad_request(fn: Callable[[], Any]) -> Any:
+        try:
+            return fn()
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+
+    def no_store(data: Any) -> JSONResponse:
+        return JSONResponse(data, headers={"Cache-Control": "no-store"})
 
     def device(request: Request) -> str:
         """检查设备令牌和频率限制，返回设备名（即信号来源）。"""
@@ -621,7 +672,50 @@ def create_app(
 
     @api.get("/today")
     async def today():
-        return JSONResponse(state["p"].today(), headers={"Cache-Control": "no-store"})
+        return no_store(state["p"].today())
+
+    @api.get("/day")
+    async def day(date: str):
+        """公开：某一天的主状态时间线和各类别时长（和 /today 格式相同）。"""
+        return no_store(bad_request(lambda: state["p"].today(day=date)))
+
+    @api.get("/history")
+    async def history(request: Request):
+        p, q = state["p"], request.query_params
+        days = bad_request(lambda: p.days(q.get("from"), q.get("to"), HISTORY_DAYS))
+        return no_store(stats.history(p.db, p.rules, days, p.clock(), p.settings.tz, p.settings.day_start_hour))
+
+    # -- 私有接口（经 ignat-auth 登录；见 gate）
+
+    @private.get("/day")
+    async def private_day(date: str | None = None):
+        p = state["p"]
+        days = bad_request(lambda: p.days(date, date, 1))
+        return no_store(stats.private_day(p.db, p.rules, days[0], p.clock(), p.settings.tz, p.settings.day_start_hour))
+
+    @private.get("/summary")
+    async def private_summary(request: Request):
+        p, q = state["p"], request.query_params
+        return no_store(bad_request(lambda: stats.summary(
+            p.db, p.rules, p.days(q.get("from"), q.get("to"), 7), q.get("group", "category"),
+            p.clock(), p.settings.tz, p.settings.day_start_hour, during=q.get("during") or None)))
+
+    @private.get("/focus")
+    async def private_focus(request: Request):
+        p, q = state["p"], request.query_params
+        days = bad_request(lambda: p.days(q.get("from"), q.get("to"), 7))
+        return no_store(stats.focus(p.db, p.rules, days, p.clock(), p.settings.tz, p.settings.day_start_hour))
+
+    @private.get("/export")
+    async def private_export(request: Request):
+        p, q = state["p"], request.query_params
+        fmt = q.get("format", "json")
+        days = bad_request(lambda: p.days(q.get("from"), q.get("to"), 1))
+        body, mime = bad_request(lambda: stats.export(p.db, days, fmt, p.clock(), p.settings.tz,
+                                                      p.settings.day_start_hour))
+        name = f"presence-{days[0].isoformat()}_{days[-1].isoformat()}.{fmt}"
+        return Response(body, media_type=mime, headers={
+            "Cache-Control": "no-store", "Content-Disposition": f'attachment; filename="{name}"'})
 
     @api.get("/health")
     async def health():
@@ -655,6 +749,7 @@ def create_app(
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
+    api.include_router(private)
     app.include_router(api)
     return app
 
