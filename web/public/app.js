@@ -166,6 +166,8 @@ function renderCard(item, t, inSide = false) {
 
 function renderMain(t) {
   const m = state.main;
+  // 主标题说明正在做什么，具体网页标题和域名放在下方卡片。
+  const mainLabel = m.category === "browse" && m.card?.kind === "web" ? "网上冲浪" : m.label;
   const hero = document.querySelector(".hero");
   const color = m.type === "idle" ? "var(--dim)" : cardHue(m);
   hero.style.setProperty("--hue", color);
@@ -177,9 +179,9 @@ function renderMain(t) {
   $("clock").textContent = clock(t);
   $("kicker").textContent = m.category === "out" ? "出门走走" : m.type === "idle" ? (m.category === "offline" ? "OFFLINE" : "AWAY") : KICKER[m.type];
   const label = $("main-label");
-  label.replaceChildren(...[phoneIcon(m, "main"), m.label].filter((child) => child != null));
-  label.title = m.label; // 超过两行时被截断，悬停看全文
-  const labelLength = [...m.label].length;
+  label.replaceChildren(...[phoneIcon(m, "main"), mainLabel].filter((child) => child != null));
+  label.title = mainLabel; // 超过两行时被截断，悬停看全文
+  const labelLength = [...mainLabel].length;
   label.classList.toggle("long", labelLength > 14 || (m.category === "phone" && labelLength >= 10));
   const meta = $("main-meta");
   meta.replaceChildren();

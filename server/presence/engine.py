@@ -420,6 +420,9 @@ class MacTracker:
                                 since=self.page_since, tier=99, card=card))
         for lg in self.lingers.values():
             a = lg.act
+            # 当前网页已经代表浏览活动，不再另列此前浏览的余温；记录和计时不变。
+            if a.category == "browse" and any(i.card and i.card.get("kind") == "web" for i in out):
+                continue
             slacking = self.rules.is_serious(a.category) and self.rules.tier(a.category) < cur_tier
             out.append(self.e.activity_item(
                 a.category, lg.since, slacking_since=lg.left_at if slacking else None,
@@ -731,6 +734,9 @@ class Engine:
     def activity_item(self, category: str, since: float | None, values: dict | None = None, **kw: Any) -> Item:
         d = self.rules.activities.get(category)
         label = _fmt(d.label, **(values or {})) if d else category
+        card = kw.get("card")
+        if category == "browse" and card and card.get("kind") == "web":
+            label = card.get("title") or card["domain"]
         if category == "video" and values and values.get("name"):
             label = f"看 {values['name']}"  # 主状态前面有“正在”，这里不再写“在”
         if category == "phone" and values and (app := self.rules.phone_apps.get(values.get("app") or "")):
