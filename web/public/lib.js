@@ -85,8 +85,8 @@ export function h(tag, attrs = {}, ...children) {
 }
 
 // 把 parent 的子节点原地改成 next 的样子：结构相同的元素保留，只改属性和文字。
-// 每秒重画时卡片元素不被替换，鼠标泛光（data-lit、--spot-x/y）才不会一闪一闪
-const KEEP = ["--spot-x", "--spot-y"];
+// 每秒重画时卡片元素不被替换，鼠标泛光（data-lit、--spot-x/y）和悬停倾斜（--tilt-x/y）才不会一闪一闪、每秒弹回去
+const KEEP = ["--spot-x", "--spot-y", "--tilt-x", "--tilt-y"];
 function patchNode(a, b) {
   if (a === b) return a;
   if (a.nodeType !== b.nodeType || a.nodeName !== b.nodeName) {
@@ -97,10 +97,10 @@ function patchNode(a, b) {
     if (a.data !== b.data) a.data = b.data;
     return a;
   }
-  const kept = KEEP.map((k) => a.style.getPropertyValue(k));
+  // 先把要保留的值写进新节点，两边 style 一样时就不动页面上的节点（不触发重新计算样式）
+  KEEP.forEach((k) => { const v = a.style.getPropertyValue(k); if (v) b.style.setProperty(k, v); });
   for (const { name } of [...a.attributes]) if (name !== "data-lit" && !b.hasAttribute(name)) a.removeAttribute(name);
   for (const { name, value } of [...b.attributes]) if (a.getAttribute(name) !== value) a.setAttribute(name, value);
-  KEEP.forEach((k, i) => { if (kept[i]) a.style.setProperty(k, kept[i]); });
   patch(a, [...b.childNodes]);
   return a;
 }

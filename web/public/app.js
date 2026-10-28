@@ -32,7 +32,8 @@ function phoneIcon(item, slot) {
     phoneIcons.set(key, icon);
     if (phoneIcons.size > 50) phoneIcons.delete(phoneIcons.keys().next().value);
   }
-  return icon;
+  // 已在页面上的那个交给 patch 比对时用副本（带着 hidden），免得 h() 把它从页面上拿走
+  return icon.isConnected ? icon.cloneNode() : icon;
 }
 
 // 卡片主题色：此刻视图整体是蓝色系（见 style.css 的 --bl-*）。
@@ -100,18 +101,11 @@ const mmss = (sec) => {
 // 右上角标签大约多宽（12px 等宽字体：英文数字约 0.6em，中文 1em），给标题留出位置
 const badgeWidth = (text) => Math.ceil([...text].reduce((w, ch) => w + (ch.charCodeAt(0) > 255 ? 12 : 7.2), 0)) + 16;
 
-// 每秒重画时复用同一个封面节点：新建的图片要重新解码，会一闪一闪
-const covers = new Map();
+// 每次新建封面节点，由 patch 原地比对：属性相同就保留页面上那个，图片不会重新解码。
+// 不能缓存复用节点：已在页面上的节点被 h() 塞进新卡片时会从页面上被拿走，patch 就会把别的节点改成封面，每秒来回折腾
 function coverNode(url, player, playerName, cls = "cover") {
-  const key = `${cls}|${url || ""}|${player || ""}`;
-  let el = covers.get(key);
-  if (!el) {
-    el = h("div", { class: cls, style: url ? { backgroundImage: `url("${encodeURI(mediaUrl(url))}")` } : {} },
-      player ? h("img", { class: `player ${player}`, src: `/icons/${player.replace("_", "-")}.svg`, alt: playerName, title: playerName }) : null);
-    covers.set(key, el);
-    if (covers.size > 50) covers.delete(covers.keys().next().value); // 只留最近建的 50 个
-  }
-  return el;
+  return h("div", { class: cls, style: url ? { backgroundImage: `url("${encodeURI(mediaUrl(url))}")` } : {} },
+    player ? h("img", { class: `player ${player}`, src: `/icons/${player.replace("_", "-")}.svg`, alt: playerName, title: playerName }) : null);
 }
 
 // inSide：伴随状态里的大卡片，右上角注明来源和连续时长（主状态的时长写在大字下面）
@@ -176,23 +170,22 @@ function renderMain(t) {
   if (art) hero.style.setProperty("--art", art);
   else hero.style.removeProperty("--art");
   setBgLive(m.category !== "offline");
-  $("clock").textContent = clock(t);
-  $("kicker").textContent = m.category === "out" ? "出门走走" : m.type === "idle" ? (m.category === "offline" ? "OFFLINE" : "AWAY") : KICKER[m.type];
+  patch($("clock"), [clock(t)]);
+  patch($("kicker"), [m.category === "out" ? "出门走走" : m.type === "idle" ? (m.category === "offline" ? "OFFLINE" : "AWAY") : KICKER[m.type]]);
   const label = $("main-label");
-  label.replaceChildren(...[phoneIcon(m, "main"), mainLabel].filter((child) => child != null));
-  label.title = mainLabel; // 超过两行时被截断，悬停看全文
+  // 每秒重画：用 patch 只改变了的部分，不每次整段换掉大字（换掉要重新排版、重画大字的辉光）
+  patch(label, [phoneIcon(m, "main"), mainLabel]);
+  if (label.title !== mainLabel) label.title = mainLabel; // 超过两行时被截断，悬停看全文
   const labelLength = [...mainLabel].length;
   label.classList.toggle("long", labelLength > 14 || (m.category === "phone" && labelLength >= 10));
-  const meta = $("main-meta");
-  meta.replaceChildren();
   const parts = metaText(m, t);
-  meta.append(parts.join(" · "));
-  if (m.slacking) {
-    meta.append(parts.length ? " · " : "", h("span", { class: "slack" }, `🐟 摸鱼中 ${dur(t - m.slacking.since)}`));
-  }
+  patch($("main-meta"), [parts.join(" · "), ...(m.slacking
+    ? [parts.length ? " · " : "", h("span", { class: "slack" }, `🐟 摸鱼中 ${dur(t - m.slacking.since)}`)] : [])]);
   patch($("main-card"), [renderCard(m, t)]);
-  // 切到历史视图时标题归 views.js 管
-  if (document.documentElement.dataset.view === "now") document.title = m.type === "idle" ? "Now · Ignat" : `${m.label} · Now`;
+  // 切到历史视图时标题归 views.js 管。用 mainLabel 而不是网页标题：
+  // 自己在 Safari 里开着这个页面时，网页标题会被上报成新的状态，再写进标题，越叠越长（“Now · Now · Now…”）
+  const docTitle = m.type === "idle" ? "Now · Ignat" : `${mainLabel} · Now`;
+  if (document.documentElement.dataset.view === "now" && document.title !== docTitle) document.title = docTitle;
 }
 
 // 类别简称：/today 里带着服务器给的名字，还没拉到时先用标签
@@ -213,10 +206,11 @@ function renderTile(item, index, t) {
   const paused = c.state === "paused" && !readingComments(c);
   if (c.kind === "web") {
     const site = c.domain.replace(/^www\./, "");
+    cat = "网上冲浪";
     title = c.title || site;
     sub = site;
     href = `https://${c.domain}`;
-    if (c.cover) thumb = h("img", { class: "ic", src: mediaUrl(c.cover), alt: "", style: { width: "24px", height: "24px" } });
+    if (c.cover) thumb = h("img", { class: "ic", src: mediaUrl(c.cover), alt: "" });
   } else if (item.category === "music") {
     cat = [cat, c.player_name].filter(Boolean).join(" · ");
     title = c.title || item.label;

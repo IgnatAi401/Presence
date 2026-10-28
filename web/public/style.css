@@ -109,8 +109,9 @@ body::after {
   position: fixed;
   inset: 0;
   pointer-events: none;
+  /* 纯黑半透明条用普通叠加就是压暗，不用 mix-blend-mode: multiply：
+     整屏混合层在 Safari 里每次合成（滚动、橡皮筋回弹）都要和下面所有层一起重算 */
   background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0) 0 2px, rgba(0, 0, 0, 0.18) 2px 3px);
-  mix-blend-mode: multiply;
 }
 
 a { color: inherit; }
@@ -405,6 +406,9 @@ a.in:hover { border-color: color-mix(in srgb, var(--hue) 45%, transparent); }
 .tile.bare .in, .tile .in:has(> .thumb > [hidden]:only-child) { grid-template-columns: 1fr; }
 .tile .thumb:has(> [hidden]:only-child) { display: none; }
 .tile .thumb img.ic, .tile .thumb .app-icon { width: 100%; height: 100%; margin: 0; border-radius: 10px; object-fit: cover; }
+/* 网站图标常是透明底：完整显示不裁切，也不垫底色方框 */
+.tile .thumb img.ic { object-fit: contain; border-radius: 0; }
+.tile .thumb:has(> img.ic) { background: none; }
 .tile .thumb .player { position: absolute; right: -5px; bottom: -5px; width: 18px; height: 18px; border-radius: 5px; box-shadow: 0 0 0 2px #0C0C14; }
 .tile .thumb .player.aimp { border-radius: 50%; }
 .tile .info { min-width: 0; }

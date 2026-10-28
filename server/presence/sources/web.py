@@ -140,14 +140,19 @@ def ico_to_png(data: bytes) -> bytes | None:
 def _download(url: str, max_bytes: int) -> Icon | None:
     try:
         data, final = _open(url, max_bytes)
-    except Exception:
+    except Exception as exc:
+        log.info("图标下载失败 %s：%r", url, exc)
         return None
     mime = sniff(data)
     if mime == "image/x-icon":
         data, mime = ico_to_png(data), "image/png"
         if data is None:
+            log.info("ICO 转 PNG 失败 %s", url)
             return None
-    return Icon(data, mime, final) if mime else None
+    if not mime:
+        log.info("不是图片 %s：%r", url, data[:40])
+        return None
+    return Icon(data, mime, final)
 
 
 def fetch_icon(domain: str, max_bytes: int) -> Icon | None:
