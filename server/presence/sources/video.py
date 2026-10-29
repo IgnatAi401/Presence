@@ -132,5 +132,5 @@ def fetch_cover(url: str, max_bytes: int) -> bytes | None:
     try:
         return _get(url, referer="https://www.bilibili.com/", limit=max_bytes)
     except Exception as exc:
-        log.warning("下载视频封面失败 %s：%s", url, exc)
+        log.warning("下载封面失败 %s：%s", url, exc)  # 游戏封面也走这里
         return None

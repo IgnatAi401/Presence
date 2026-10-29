@@ -152,6 +152,7 @@ class Presence:
         self.fetch_icon: Callable[[str, int], web.Icon | None] = web.fetch_icon
         # Steam：上次查到的游戏；游戏封面 appid → sha256（None 表示没取到，记下时间稍后重试）
         self.fetch_steam: Callable[[str, str], steam.Playing | None] = steam.fetch_playing
+        self.fetch_game_cover_url: Callable[[str], str] = steam.fetch_cover_url
         self.steam_playing: steam.Playing | None = None
         self.game_covers: dict[str, tuple[str | None, float]] = {}
         self.cover_fetching: set[str] = set()
@@ -332,10 +333,11 @@ class Presence:
         self.spawn(self.load_game_cover(appid))
 
     async def load_game_cover(self, appid: str) -> None:
-        url = steam.cover_url(appid)
+        origin = steam.cover_url(appid)  # 缓存键固定用旧式地址，真实下载地址每次向商店查
         try:
+            url = await asyncio.to_thread(self.fetch_game_cover_url, appid)
             data = await asyncio.to_thread(self.fetch_cover, url, self.settings.media_max_bytes)
-            self.game_covers[appid] = (self.save_fetched_image(data, "steam", url), self.clock())
+            self.game_covers[appid] = (self.save_fetched_image(data, "steam", origin), self.clock())
             self.update()
         except Exception:
             log.exception("保存游戏封面出错 %s", appid)

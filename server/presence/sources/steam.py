@@ -22,6 +22,7 @@ import truststore
 log = logging.getLogger("presence.steam")
 
 API = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
+STORE_API = "https://store.steampowered.com/api/appdetails"
 TIMEOUT = 10
 SSL_CONTEXT = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 APPID = re.compile(r"\d{1,10}")  # 非 Steam 游戏快捷方式的 gameid 是很大的 64 位数，没有商店页和封面
@@ -38,7 +39,26 @@ class Playing:
 
 
 def cover_url(appid: str) -> str:
+    """旧式固定封面地址；较新的游戏在这里没有图（404），只当缓存键和兜底用。"""
     return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
+
+
+def parse_header(resp: dict, appid: str) -> str | None:
+    entry = resp.get(appid) or {}
+    url = (entry.get("data") or {}).get("header_image") if entry.get("success") else None
+    return url if isinstance(url, str) and url.startswith("https://") else None
+
+
+def fetch_cover_url(appid: str) -> str:
+    """从商店接口查封面地址（新游戏的路径里带哈希，拼不出来）；查不到时退回旧式地址。"""
+    url = STORE_API + "?" + urllib.parse.urlencode({"appids": appid, "filters": "basic"})
+    try:
+        with urllib.request.urlopen(url, timeout=TIMEOUT, context=SSL_CONTEXT) as r:
+            header = parse_header(json.loads(r.read(1 << 20)), appid)
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+        log.warning("查询游戏封面地址失败 %s：%s", appid, getattr(exc, "reason", exc))
+        header = None
+    return header or cover_url(appid)
 
 
 def parse(resp: dict) -> Playing | None:
