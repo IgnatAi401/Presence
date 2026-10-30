@@ -19,6 +19,7 @@ cp "$bin" "$app/Contents/MacOS/PresenceAgent"
 vtool -set-build-version macos 14.0 "$(xcrun --show-sdk-version)" -replace \
   -output "$app/Contents/MacOS/PresenceAgent" "$app/Contents/MacOS/PresenceAgent"
 cp Resources/Info.plist "$app/Contents/Info.plist"
+cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 codesign --force --sign "${PRESENCE_SIGN_IDENTITY:--}" --identifier ai.ignat.presence.agent "$app"
 codesign --verify --strict "$app"
 echo "已构建 $app"
