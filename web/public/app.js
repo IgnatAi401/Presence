@@ -229,6 +229,8 @@ function renderTile(item, index, t) {
     title = c.name || item.label;
     sub = "Steam";
     href = c.appid ? `https://store.steampowered.com/app/${encodeURIComponent(c.appid)}` : null;
+    if (c.cover) thumb = coverNode(c.cover, null, null, "thumb");
+    wide = Boolean(c.cover);
   } else if (item.category === "phone") {
     title = item.app || item.label;
     sub = "iPhone";
