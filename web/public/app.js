@@ -235,8 +235,10 @@ function renderTile(item, index, t) {
     if (c.cover) thumb = coverNode(c.cover, null, null, "thumb");
     wide = Boolean(c.cover);
   } else if (item.category === "phone") {
-    title = item.app || item.label;
-    sub = deviceName(item);
+    // 类别位置写设备（Mac 上用 Muse 不该叫“刷手机”），标题用服务器给的文案（“在和 Muse 聊天”）
+    cat = deviceName(item);
+    title = item.label || item.app;
+    sub = "";
     thumb = phoneIcon(item, `side-${index}`);
   }
   if (item.slacking) sub = [sub, `🐟 摸鱼中 ${dur(t - item.slacking.since)}`].filter(Boolean).join(" · ");
