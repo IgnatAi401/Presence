@@ -55,4 +55,4 @@
 | 音乐卡片的 `card.player_name` | `players` |
 | 合并进锚定状态的活动简称 `activity_name`，`/today` 里的 `names` | `anchors` / `activities` 的 `short` |
 
-新增一个手机 App：在 `phone_apps` 里加一行，把 128×128 的图标放进 `web/public/icons/apps/`，并在同目录的 `sources.json` 里记下来源。
+新增一个手机 App：在 `phone_apps` 里加一行，把 128×128 的图标放进 `web/public/icons/apps/`，并在同目录的 `sources.json` 里记下来源。该 App 在 Mac 上也有同款时，在那一行写上 `mac: <Mac 版 bundle id>`（例如 Muse 的 `com.meta.endo`）：Mac 前台是它时按同一条文案显示，返回的 `device` 和使用历史的 `source` 区分 `mac` / `iphone`。

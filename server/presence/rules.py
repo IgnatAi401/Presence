@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 REFERENCE = "reference"
+PHONE = "phone"  # 手机 App 类活动；Mac 上的同款 App 也归这里，按设备来源区分
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class ActivityDef:
 class PhoneApp:
     label: str  # 公开文案
     icon: str | None = None  # web/public/icons/apps/<icon>.png
+    mac: str | None = None  # 同一个 App 的 Mac 版 bundle id：Mac 前台是它时也按这个 App 显示
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,7 @@ class Classified:
     category: str
     project: str | None = None
     domain: str | None = None
+    app: str | None = None  # 手机 App 的键（Mac 上用同一个 App 时）
 
 
 @dataclass
@@ -54,6 +57,7 @@ class Rules:
     video_sites: dict[str, str] = field(default_factory=dict)  # 视频信号的 site → 显示名
     phone_apps: dict[str, PhoneApp] = field(default_factory=dict)
     players: dict[str, str] = field(default_factory=dict)  # 音乐信号的 player → 显示名
+    mac_apps: dict[str, str] = field(default_factory=dict)  # Mac bundle id → phone_apps 的键
 
     @classmethod
     def load(cls, path: Path) -> Rules:
@@ -69,6 +73,7 @@ class Rules:
                 site_names[k] = name
                 if v.get("video"):
                     video_sites[v["video"]] = name
+        phone_apps = {k: PhoneApp(**v) for k, v in (raw.get("phone_apps") or {}).items()}
         return cls(
             anchors={k: AnchorDef(**{**v, "slack": tuple(v.get("slack") or ())}) for k, v in raw.get("anchors", {}).items()},
             activities={k: ActivityDef(**v) for k, v in raw.get("activities", {}).items()},
@@ -76,8 +81,9 @@ class Rules:
             apps=raw.get("apps") or {},
             site_names=site_names,
             video_sites=video_sites,
-            phone_apps={k: PhoneApp(**v) for k, v in (raw.get("phone_apps") or {}).items()},
+            phone_apps=phone_apps,
             players=raw.get("players") or {},
+            mac_apps={a.mac: k for k, a in phone_apps.items() if a.mac},
         )
 
     def is_serious(self, category: str | None) -> bool:
@@ -106,7 +112,7 @@ class Rules:
         return None
 
     def classify_desktop(self, data: dict) -> Classified | None:
-        """按 项目 → 域名 → App 默认值 的顺序匹配；都未命中返回 None（沿用上一个活动）。
+        """按 项目 → 域名 → 手机同款 App → App 默认值 的顺序匹配；都未命中返回 None（沿用上一个活动）。
 
         项目的分类用小工具设置里选的（data.category），只接受公开显示项目名的活动（科研 / 开发）；
         没选时按 App 默认值算。
@@ -126,6 +132,8 @@ class Rules:
             if hit:
                 return Classified(hit[1], domain=hit[0])
             return Classified(REFERENCE, domain=domain)
+        if bundle in self.mac_apps:
+            return Classified(PHONE, app=self.mac_apps[bundle])
         if bundle in self.apps:
             return Classified(self.apps[bundle], project=project)
         return None

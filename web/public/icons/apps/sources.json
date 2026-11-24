@@ -125,6 +125,15 @@
     "source": "https://apps.apple.com/us/app/claude-by-anthropic/id6473753684?uo=4",
     "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/eb/00/7c/eb007c0a-a26e-eb3e-9f89-cb1c37049237/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg"
   },
+  "Muse": {
+    "file": "muse.png",
+    "id": 6760173601,
+    "name": "Muse from Meta",
+    "bundle": "com.facebook.hatch",
+    "seller": "Meta Platforms, Inc.",
+    "source": "https://apps.apple.com/us/app/muse-from-meta/id6760173601?uo=4",
+    "artwork": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/80/26/47/80264783-e41c-97e5-f1ea-bc92f321b0fa/HatchAppIconPublic-0-0-1x_U007epad-0-1-0-sRGB-0-85-220.png/512x512bb.jpg"
+  },
   "淘宝": {
     "file": "taobao.png",
     "id": 387682726,

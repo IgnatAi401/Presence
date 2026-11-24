@@ -87,7 +87,7 @@ function renderLogs(d) {
     const title = m.title || (m.type === "video" ? m.key.split(":")[1] : m.key);
     const url = m.type === "video" ? videoUrl(m.key, m.page) : null;
     const sub = m.type === "video" ? [m.artist, SITES[m.player]].filter(Boolean).join(" · ")
-      : m.type === "music" ? m.artist : m.type === "app" ? "iPhone" : null;
+      : m.type === "music" ? m.artist : m.type === "app" ? (m.source === "mac" ? "Mac" : "iPhone") : null;
     return logItem(m.start, m.end, [
       h("span", { class: "tag", "--hue": hue(m.type === "app" ? "phone" : m.type) }, MEDIA_KIND[m.type]),
       url ? h("a", { href: url, target: "_blank", rel: "noopener", title }, title) : h("span", { title }, title),

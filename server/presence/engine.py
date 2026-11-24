@@ -81,10 +81,11 @@ class Item:
     activity_name: str | None = None  # 合并进来的活动的简称（“今日科研”）
     app: str | None = None  # 手机前台 App 名
     icon: str | None = None  # 公开页本地图标：/icons/apps/<icon>.png
+    device: str | None = None  # 手机 App 类活动在哪台设备上（mac / iphone）
 
     def public(self) -> dict[str, Any]:
         out: dict[str, Any] = {"type": self.type, "category": self.category, "label": self.label}
-        for k in ("tier", "since", "until", "detail", "card", "activity", "activity_name", "app", "icon"):
+        for k in ("tier", "since", "until", "detail", "card", "activity", "activity_name", "app", "icon", "device"):
             v = getattr(self, k)
             if v is not None:
                 out[k] = v
@@ -154,9 +155,10 @@ class MacAct:
     domain: str | None = None  # 命中的规则域名（bilibili.com），用来取显示名
     host: str | None = None  # Safari 当前网页的实际域名（www.bilibili.com），网页卡片用
     title: str | None = None  # Safari 当前网页的标题
+    app: str | None = None  # Mac 上用的手机同款 App（rules.yaml 里 phone_apps 写了 mac 的）
 
     def same(self, other: MacAct | None) -> bool:
-        if other is None or self.category != other.category:
+        if other is None or self.category != other.category or self.app != other.app:
             return False
         return self.project is None or other.project is None or self.project == other.project
 
@@ -250,7 +252,7 @@ class MacTracker:
 
     def resolve(self, c: Classified, ts: float) -> MacAct:
         if c.category != REFERENCE:
-            return MacAct(c.category, c.project, c.domain)
+            return MacAct(c.category, c.project, c.domain, app=c.app)
         ctx = self.serious_context(ts)
         if ctx:
             return MacAct(ctx.category, ctx.project, c.domain)
@@ -306,6 +308,10 @@ class MacTracker:
             interrupted = ts - resumed.left_at >= self.t.enter_sec
         self.current = act
         self.current_since = resumed.since if resumed is not None else ts
+        meta: dict[str, Any] = {"resumed": True} if interrupted else {}
+        if act.app:
+            # 和手机 App 一样写进使用历史，设备来源是这台 Mac
+            meta["media"] = {"type": "app", "key": act.app, "title": act.app, "play": None}
         self.current_iv = self.e.open(
             ACTIVITY,
             act.category,
@@ -313,8 +319,10 @@ class MacTracker:
             source=self.source,
             project=act.project,
             domain=act.domain,
-            meta={"resumed": True} if interrupted else {},
+            meta=meta,
         )
+        if act.app:
+            meta["media"]["play"] = self.current_iv.id
 
     def refresh(self, act: MacAct) -> None:
         """同一活动内的细节变化（例如切到资料网页、换了网页、补上项目名），不新开片段。"""
@@ -412,7 +420,8 @@ class MacTracker:
             out.append(self.e.activity_item(
                 a.category, self.current_since, card=merged,
                 project=a.project, domain=a.domain,
-                values={"name": self.rules.site_names.get(a.domain or "")},
+                values={"name": self.rules.site_names.get(a.domain or ""), "app": a.app},
+                **({"app": a.app, "device": self.source} if a.app else {}),
             ))
             if card and merged is None:
                 # 开发、科研时看的网页单独一张卡片；只是显示，不算摸鱼，时长仍记在正事上
@@ -427,7 +436,8 @@ class MacTracker:
             out.append(self.e.activity_item(
                 a.category, lg.since, slacking_since=lg.left_at if slacking else None,
                 project=a.project, domain=a.domain,
-                values={"name": self.rules.site_names.get(a.domain or "")},
+                values={"name": self.rules.site_names.get(a.domain or ""), "app": a.app},
+                **({"app": a.app, "device": self.source} if a.app else {}),
             ))
         return out
 
@@ -845,4 +855,4 @@ class Engine:
         if f.category == "game":
             card = {"name": d.get("name"), "appid": d.get("appid"), "since": f.since}
             return self.activity_item("game", f.since, values={"name": d.get("name") or d.get("exe")}, card=card)
-        return self.activity_item(f.category, f.since, values={"app": d.get("app")}, app=d.get("app"))
+        return self.activity_item(f.category, f.since, values={"app": d.get("app")}, app=d.get("app"), device=f.source)

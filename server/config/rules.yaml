@@ -27,6 +27,7 @@ activities:
 
 # 手机 App：键是快捷指令上报的 App 名（已装的快捷指令按这个名字上报，不要改键）
 #   label：公开文案（未列出的 App 沿用“在刷 {app}”）；icon：web/public/icons/apps/<icon>.png
+#   mac：同一个 App 的 Mac 版 bundle id（可选）；Mac 前台是它时也显示这条文案，页面和历史按设备区分 Mac / iPhone
 phone_apps:
   X: { label: "在 X 上刷动态", icon: x }
   Instagram: { label: "在 IG 看看大家的日常", icon: instagram }
@@ -46,11 +47,12 @@ phone_apps:
   ChatGPT: { label: "在和 ChatGPT 聊天", icon: chatgpt }
   DeepSeek: { label: "在和 DeepSeek 聊天", icon: deepseek }
   Claude: { label: "在和 Claude 聊天", icon: claude }
+  Muse: { label: "在和 Muse 聊天", icon: muse, mac: com.meta.endo }
   淘宝: { label: "在淘宝淘点好东西", icon: taobao }
   京东: { label: "在京东逛逛", icon: jd }
   闲鱼: { label: "在闲鱼淘二手", icon: xianyu }
 
-# Mac 前台的分类顺序：项目 → 域名 → App 默认值；都没命中时沿用上一个活动。
+# Mac 前台的分类顺序：项目 → 域名 → 手机同款 App（phone_apps 的 mac）→ App 默认值；都没命中时沿用上一个活动。
 #   项目算科研还是开发在 Mac 小工具的 设置 → 项目 里选，随信号上报（data.category）；没选的项目按 App 默认值算。
 
 # 域名匹配（Safari 在前台时）；子域名自动匹配，例如 www.bilibili.com

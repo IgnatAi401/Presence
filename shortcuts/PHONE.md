@@ -1,12 +1,12 @@
-# 刷手机：42 条自动化，直接复用上报
+# 刷手机：44 条自动化，直接复用上报
 
-已准备 42 个带原生 App 触发器的自动化模板，例如 `Presence · X · 打开`、`Presence · X · 退出`、`Presence · IG · 打开`。每个模板已包含“触发器 → 字典 → Presence · 上报”，只把触发器的具体 App 选择留空；上报字典里的 App 名、open/close 事件已经填好。全部直接复用现有上报，令牌仍集中保存在“上报”一处。
+已准备 44 个带原生 App 触发器的自动化模板，例如 `Presence · X · 打开`、`Presence · X · 退出`、`Presence · IG · 打开`。每个模板已包含“触发器 → 字典 → Presence · 上报”，只把触发器的具体 App 选择留空；上报字典里的 App 名、open/close 事件已经填好。全部直接复用现有上报，令牌仍集中保存在“上报”一处。
 
 ## 安装
 
 1. **服务器先更新本次代码和 `server/config/rules.yaml`，然后重启后端**。本次新增了手机 App 文案，并让关闭事件立即结束手机状态。
 2. 确认已更新支持 `phone_app` 的“Presence · 上报”并配置令牌。这版上报兼容已有睡觉、起床、吃饭和自定义状态。
-3. 将 `automations/build/Presence-手机自动化42个.zip` 传到 iPhone，解压并导入其中的 42 个 `.shortcut` 文件。
+3. 将 `automations/build/Presence-手机自动化44个.zip` 传到 iPhone，解压并导入其中的 44 个 `.shortcut` 文件。
 4. 编辑每个模板，点击最上方触发器的 **App**，选择标题对应的软件。“打开／退出”已设定，下方字典和“运行快捷指令”无需重写。若系统要求确认运行方式，选择自动运行；根据需要在隐私设置允许锁定时运行。
 
 模板使用 OS 27 的 `WFWorkflowTriggers` 格式，适用于支持将自动化触发器放进并共享快捷指令的新版系统。App 未选择前，系统会显示“配置 App 启用此自动化”，不会触发。旧版系统若不支持此格式，使用下方手工配置方式。模板不含令牌，不读取聊天、浏览记录、网页地址、商品、帖子或歌曲内容。
@@ -24,7 +24,7 @@
 3. 新建空白自动化，添加“字典”动作，添加三个条目，类型都选“文本”：`kind` = `phone_app`、`app` = `B站`、`event` = `open`。
 4. 在后面添加“运行快捷指令”，选择“Presence · 上报”。展开该动作，将“输入”设为前面“字典”的输出（系统若已自动连接，保留即可）。保存。
 5. 再建一条 App 自动化，同样选哔哩哔哩，这次只勾选“已关闭”。动作仍是字典 → 运行“上报”，字典的 `event` 改为 `close`，其他字段相同。
-6. 对其他 App 重复，只更换触发的 App 和字典的 `app`；打开和退出使用完全相同的 App 名称。共 42 条自动化，复用一个“上报”。不要把同一条自动化的“已打开”和“已关闭”同时勾上。
+6. 对其他 App 重复，只更换触发的 App 和字典的 `app`；打开和退出使用完全相同的 App 名称。共 44 条自动化，复用一个“上报”。不要把同一条自动化的“已打开”和“已关闭”同时勾上。
 
 动作顺序示例：
 
@@ -66,6 +66,7 @@
 | ChatGPT | ChatGPT | 在和 ChatGPT 聊天 |
 | DeepSeek | DeepSeek | 在和 DeepSeek 聊天 |
 | Claude | Claude | 在和 Claude 聊天 |
+| Muse | Muse | 在和 Muse 聊天 |
 | 淘宝 | 淘宝 | 在淘宝淘点好东西 |
 | 京东 | 京东 | 在京东逛逛 |
 | 闲鱼 | 闲鱼 | 在闲鱼淘二手 |
@@ -73,6 +74,8 @@
 文案集中在 `server/config/rules.yaml` 的 `phone_apps`，调整后重启后端即可，不必重做手机指令。文案按 App 设置，不在每次打开时随机变化，避免一次使用过程中状态反复改字。
 
 ## 行为和边界
+
+- Muse 在 Mac 上也有同款 App：Mac 小工具已上报前台 App，服务器按 `rules.yaml` 里 Muse 的 `mac: com.meta.endo` 识别，Mac 上不需要快捷指令。两边显示同一条“在和 Muse 聊天”，页面小字和使用历史分别标 Mac / iPhone；其他 App 想在 Mac 上也这样显示，在 `phone_apps` 那一行加上 Mac 版的 bundle id 即可。
 
 - 打开 A 后打开 B，只显示 B；随后 A 的关闭事件晚到，也不会清掉 B。
 - 关闭事件只停止同名 App 的手机状态，不清除吃饭、睡觉、办公室、自定义状态或其他设备的活动。重复关闭无副作用。
@@ -106,7 +109,7 @@ cd /Users/ignat/Developer/Presence/server
 uv run --locked python ../shortcuts/build.py --reporter-only --sign
 ```
 
-生成 42 个自动化模板（只在触发器中留空 App 选择）：
+生成 44 个自动化模板（只在触发器中留空 App 选择）：
 
 ```sh
 uv run --locked python ../shortcuts/build.py --automations --sign
@@ -114,4 +117,4 @@ uv run --locked python ../shortcuts/build.py --automations --sign
 
 模板 XML 在 `automations/source/`，签名文件在 `automations/build/`。触发器格式来自原生快捷指令应用实际导出的空 App 样例，记录在 `automations/trigger-format.json`；不读写快捷指令的内部数据库。
 
-公开页根据接口中的 `app` 显示对应 App 图标，主状态和伴随状态均支持。21 个图标来自 App Store 官方素材，保存在网站本地静态目录；来源记录见 `web/public/icons/apps/sources.json`。此功能需要同步更新后端和网页。
+公开页根据接口中的 `app` 显示对应 App 图标，主状态和伴随状态均支持。22 个图标来自 App Store 官方素材，保存在网站本地静态目录；来源记录见 `web/public/icons/apps/sources.json`。此功能需要同步更新后端和网页。

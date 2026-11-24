@@ -65,9 +65,12 @@ function sessionSec(card, t) {
   return end - card.session_since;
 }
 
+// 手机 App 类活动在哪台设备上：Mac 上用同款 App（例如 Muse）时显示 Mac
+const deviceName = (item) => (item.device === "mac" ? "Mac" : "iPhone");
+
 function metaText(item, t) {
   const parts = item.detail ? [item.detail] : []; // 工作区名放最前面
-  if (item.category === "phone") parts.push("iPhone");
+  if (item.category === "phone") parts.push(deviceName(item));
   if (item.type === "anchor" && item.category === "class" && item.until) {
     parts.push(`还剩 ${dur(item.until - t)}`);
   } else if (item.category === "video" && item.card?.session_since) {
@@ -233,7 +236,7 @@ function renderTile(item, index, t) {
     wide = Boolean(c.cover);
   } else if (item.category === "phone") {
     title = item.app || item.label;
-    sub = "iPhone";
+    sub = deviceName(item);
     thumb = phoneIcon(item, `side-${index}`);
   }
   if (item.slacking) sub = [sub, `🐟 摸鱼中 ${dur(t - item.slacking.since)}`].filter(Boolean).join(" · ");

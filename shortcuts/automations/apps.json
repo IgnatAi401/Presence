@@ -17,6 +17,7 @@
   {"name": "ChatGPT", "app": "ChatGPT"},
   {"name": "DeepSeek", "app": "DeepSeek"},
   {"name": "Claude", "app": "Claude"},
+  {"name": "Muse", "app": "Muse"},
   {"name": "淘宝", "app": "淘宝"},
   {"name": "京东", "app": "京东"},
   {"name": "闲鱼", "app": "闲鱼"}
